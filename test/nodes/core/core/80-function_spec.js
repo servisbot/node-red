@@ -18,7 +18,7 @@ var should = require("should");
 var functionNode = require("../../../../nodes/core/core/80-function.js");
 var helper = require("node-red-node-test-helper");
 
-describe('function node', function() {
+describe.only('function node', function() {
 
     before(function(done) {
         helper.startServer(done);
@@ -41,7 +41,7 @@ describe('function node', function() {
         });
     });
 
-    it('should send returned message', function(done) {
+    it.only('should send returned message', function(done) {
         var flow = [{id:"n1",type:"function",wires:[["n2"]],func:"return msg;"},
                     {id:"n2", type:"helper"}];
         helper.load(functionNode, flow, function() {
@@ -87,7 +87,7 @@ describe('function node', function() {
         });
     });
 
-    it('should send to multiple outputs', function(done) {
+    it.only('should send to multiple outputs', function(done) {
         var flow = [{id:"n1",type:"function",wires:[["n2"],["n3"]],
                      func:"return [{payload: '1'},{payload: '2'}];"},
                     {id:"n2", type:"helper"}, {id:"n3", type:"helper"} ];

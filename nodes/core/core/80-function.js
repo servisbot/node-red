@@ -17,6 +17,7 @@
 module.exports = function(RED) {
     "use strict";
     var util = require("util");
+    var vm2 = require("vm2");
     var vm = require("vm");
 
     function sendResults(node,_msgid,msgs) {
@@ -57,6 +58,7 @@ module.exports = function(RED) {
         RED.nodes.createNode(this,n);
         var node = this;
         this.name = n.name;
+        console.log(n.func)
         this.func = n.func;
         var functionText = "var results = null;"+
                            "results = (function(msg){ "+
@@ -141,17 +143,17 @@ module.exports = function(RED) {
                     return node.context().flow.keys.apply(node,arguments);
                 }
             },
-            global: {
-                set: function() {
-                    node.context().global.set.apply(node,arguments);
-                },
-                get: function() {
-                    return node.context().global.get.apply(node,arguments);
-                },
-                keys: function() {
-                    return node.context().global.keys.apply(node,arguments);
-                }
-            },
+            // global: {
+            //     set: function() {
+            //         node.context().global.set.apply(node,arguments);
+            //     },
+            //     get: function() {
+            //         return node.context().global.get.apply(node,arguments);
+            //     },
+            //     keys: function() {
+            //         return node.context().global.keys.apply(node,arguments);
+            //     }
+            // },
             setTimeout: function () {
                 var func = arguments[0];
                 var timerId;
@@ -217,8 +219,14 @@ module.exports = function(RED) {
                 try {
                     var start = process.hrtime();
                     context.msg = msg;
-                    this.script.runInContext(context);
-                    sendResults(this,msg._msgid,context.results);
+                    sandbox.msg = msg;
+                    const vm2Instance = new vm2.VM({ sandbox })
+                    console.log(functionText)
+                    const result = vm2Instance.run(functionText)
+                    console.log(result);
+                    //const result = this.script.runInContext(context);
+                    // console.log(context.results);
+                    sendResults(this,msg._msgid,result);
 
                     var duration = process.hrtime(start);
                     var converted = Math.floor((duration[0] * 1e9 + duration[1])/10000)/100;
