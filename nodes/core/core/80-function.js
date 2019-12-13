@@ -18,7 +18,6 @@ module.exports = function(RED) {
     "use strict";
     var util = require("util");
     var vm2 = require("vm2");
-    var vm = require("vm");
 
     function sendResults(node,_msgid,msgs) {
         if (msgs == null) {
@@ -214,16 +213,7 @@ module.exports = function(RED) {
                 });
             }
         }
-        var context = vm.createContext(sandbox);
         try {
-            this.script = vm.createScript(functionText, {
-                filename: 'Function node:'+this.id+(this.name?' ['+this.name+']':''), // filename for stack traces
-                displayErrors: true
-                // Using the following options causes node 4/6 to not include the line number
-                // in the stack output. So don't use them.
-                // lineOffset: -11, // line number offset to be used for stack traces
-                // columnOffset: 0, // column number offset to be used for stack traces
-            });
             this.on("input", function(msg) {
                 try {
                     var start = process.hrtime();
