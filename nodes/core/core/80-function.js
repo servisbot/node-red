@@ -58,7 +58,6 @@ module.exports = function(RED) {
         RED.nodes.createNode(this,n);
         var node = this;
         this.name = n.name;
-        console.log(n.func)
         this.func = n.func;
         var functionText = "var results = null;"+
                            "results = (function(msg){ "+
@@ -73,7 +72,10 @@ module.exports = function(RED) {
                                  "status:__node__.status,"+
                                  "send:function(msgs){ __node__.send(__msgid__,msgs);}"+
                               "};\n"+
+                              "var innerFunc = (msg) => {\n" + 
                               this.func+"\n"+
+                              "};\n" +
+                              "return innerFunc(msg);" +
                            "})(msg);";
         this.topic = n.topic;
         this.outstandingTimers = [];
@@ -82,7 +84,7 @@ module.exports = function(RED) {
             console:console,
             util:util,
             Buffer:Buffer,
-            Date: Date,
+            //Date: Date,
             RED: {
                 util: RED.util
             },
@@ -198,6 +200,7 @@ module.exports = function(RED) {
                 }
             }
         };
+
         if (util.hasOwnProperty('promisify')) {
             sandbox.setTimeout[util.promisify.custom] = function(after, value) {
                 return new Promise(function(resolve, reject) {
@@ -220,13 +223,17 @@ module.exports = function(RED) {
                     var start = process.hrtime();
                     context.msg = msg;
                     sandbox.msg = msg;
-                    const vm2Instance = new vm2.VM({ sandbox })
+                    console.log('here here here');
                     console.log(functionText)
-                    const result = vm2Instance.run(functionText)
-                    console.log(result);
+
+                    const vm2Instance = new vm2.VM({ sandbox });
+                    const result2 = vm2Instance.run(functionText);
+                    console.log('result2', result2);
+
                     //const result = this.script.runInContext(context);
+                    //console.log('result', result);
                     // console.log(context.results);
-                    sendResults(this,msg._msgid,result);
+                    sendResults(this,msg._msgid, result2);
 
                     var duration = process.hrtime(start);
                     var converted = Math.floor((duration[0] * 1e9 + duration[1])/10000)/100;
@@ -235,6 +242,8 @@ module.exports = function(RED) {
                         this.status({fill:"yellow",shape:"dot",text:""+converted});
                     }
                 } catch(err) {
+                    console.log(err);
+
                     //remove unwanted part
                     var index = err.stack.search(/\n\s*at ContextifyScript.Script.runInContext/);
                     err.stack = err.stack.slice(0, index).split('\n').slice(0,-1).join('\n');
@@ -277,6 +286,8 @@ module.exports = function(RED) {
                 this.status({});
             })
         } catch(err) {
+            console.log(err);
+
             // eg SyntaxError - which v8 doesn't include line number information
             // so we can't do better than this
             this.error(err);
