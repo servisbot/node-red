@@ -56,6 +56,20 @@ describe.only('function node', function() {
         });
     });
 
+    it('should allow use of Date object', function(done) {
+        var flow = [{id:"n1",type:"function",wires:[["n2"]],func:"msg.date = Date.now(); return msg;"},
+                    {id:"n2", type:"helper"}];
+        helper.load(functionNode, flow, function() {
+        var n1 = helper.getNode("n1");
+        var n2 = helper.getNode("n2");
+        n2.on("input", function(msg) {
+            msg.date.should.match(/\d{10}/);
+            done();
+        });
+        n1.receive({payload:"foo",topic: "bar"});
+        });
+    });
+
     it('should send returned message using send()', function(done) {
         var flow = [{id:"n1",type:"function",wires:[["n2"]],func:"node.send(msg);"},
                     {id:"n2", type:"helper"}];
@@ -228,7 +242,7 @@ describe.only('function node', function() {
     it('should drop and log non-object message types - string', function(done) {
         testNonObjectMessage('return "foo"', done)
     });
-    it('should drop and log non-object message types - buffer', function(done) {
+    xit('should drop and log non-object message types - buffer', function(done) {
         testNonObjectMessage('return new Buffer("hello")', done)
     });
     it('should drop and log non-object message types - array', function(done) {

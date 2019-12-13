@@ -75,16 +75,24 @@ module.exports = function(RED) {
                               "var innerFunc = (msg) => {\n" + 
                               this.func+"\n"+
                               "};\n" +
-                              "return innerFunc(msg);" +
+                              "let output;\n" +
+                              "try {\n" +
+                              "  const result = innerFunc(msg);\n" +
+                              "  return JSON.stringify({ type: 'msg', result });\n" +
+                              "} catch (e) {\n" +
+                              "  return JSON.stringify({ type: 'error', message: e.message, stack: e.stack });\n" +
+                              "}" +
                            "})(msg);";
         this.topic = n.topic;
         this.outstandingTimers = [];
         this.outstandingIntervals = [];
         var sandbox = {
-            console:console,
+            console: {
+                log: (...args) => console.log(...args)
+            },
             util:util,
-            Buffer:Buffer,
-            //Date: Date,
+            //Buffer:Buffer,
+            Date: Date,
             RED: {
                 util: RED.util
             },
@@ -223,17 +231,18 @@ module.exports = function(RED) {
                     var start = process.hrtime();
                     context.msg = msg;
                     sandbox.msg = msg;
-                    console.log('here here here');
-                    console.log(functionText)
 
                     const vm2Instance = new vm2.VM({ sandbox });
-                    const result2 = vm2Instance.run(functionText);
-                    console.log('result2', result2);
+                    const result = JSON.parse(vm2Instance.run(functionText));
+                    if(result.type === 'error') {
+                        const error = new Error(result.message);
+                        error.stack = result.stack;
+                        throw error;
+                    }
 
-                    //const result = this.script.runInContext(context);
-                    //console.log('result', result);
-                    // console.log(context.results);
-                    sendResults(this,msg._msgid, result2);
+                    console.log('result2');
+                    console.log(result);
+                    sendResults(this,msg._msgid, result.result);
 
                     var duration = process.hrtime(start);
                     var converted = Math.floor((duration[0] * 1e9 + duration[1])/10000)/100;
@@ -242,6 +251,7 @@ module.exports = function(RED) {
                         this.status({fill:"yellow",shape:"dot",text:""+converted});
                     }
                 } catch(err) {
+                    console.log('little error');
                     console.log(err);
 
                     //remove unwanted part
@@ -286,7 +296,7 @@ module.exports = function(RED) {
                 this.status({});
             })
         } catch(err) {
-            console.log(err);
+            console.log('big error'); console.log(e);
 
             // eg SyntaxError - which v8 doesn't include line number information
             // so we can't do better than this
