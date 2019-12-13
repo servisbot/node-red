@@ -87,9 +87,7 @@ module.exports = function(RED) {
         this.outstandingTimers = [];
         this.outstandingIntervals = [];
         var sandbox = {
-            console: {
-                log: (...args) => console.log(...args)
-            },
+            console: console,
             util:util,
             //Buffer:Buffer,
             Date: Date,
@@ -240,8 +238,6 @@ module.exports = function(RED) {
                         throw error;
                     }
 
-                    console.log('result2');
-                    console.log(result);
                     sendResults(this,msg._msgid, result.result);
 
                     var duration = process.hrtime(start);
@@ -251,9 +247,6 @@ module.exports = function(RED) {
                         this.status({fill:"yellow",shape:"dot",text:""+converted});
                     }
                 } catch(err) {
-                    console.log('little error');
-                    console.log(err);
-
                     //remove unwanted part
                     var index = err.stack.search(/\n\s*at ContextifyScript.Script.runInContext/);
                     err.stack = err.stack.slice(0, index).split('\n').slice(0,-1).join('\n');
@@ -296,8 +289,6 @@ module.exports = function(RED) {
                 this.status({});
             })
         } catch(err) {
-            console.log('big error'); console.log(e);
-
             // eg SyntaxError - which v8 doesn't include line number information
             // so we can't do better than this
             this.error(err);

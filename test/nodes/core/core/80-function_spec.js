@@ -18,7 +18,7 @@ var should = require("should");
 var functionNode = require("../../../../nodes/core/core/80-function.js");
 var helper = require("node-red-node-test-helper");
 
-describe.only('function node', function() {
+describe('function node', function() {
 
     before(function(done) {
         helper.startServer(done);
