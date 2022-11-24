@@ -166,6 +166,8 @@ function setFlows(_config,type,muteLog,forceStart) {
                     });
                     return flowRevision;
                 }).catch(function(err) {
+                    log.error('setFlows error');
+                    log.error(err);
                 })
             } else {
                 events.emit("runtime-event",{id:"runtime-deploy",payload:{revision:flowRevision},retain: true});
