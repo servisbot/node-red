@@ -329,10 +329,8 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
 
     var createNodeInSubflow = function(def) {
         node = clone(def);
-        var nid = redUtil.generateId();
         node_map[node.id] = node;
         node._alias = node.id;
-        node.id = nid;
         node.z = sfn.id;
         newNodes.push(node);
     }
