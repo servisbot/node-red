@@ -9,12 +9,15 @@ To make a change to the node-red runtime being used by K4 avalanche:
 6. Run `npm run build`
 7. Manually publish to NPM with `npm publish` - Request creds from ops for this
 
+Note: You need xcode installed to be able to install/build/publish this module properly
+
 
 # CHANGE-LOG
 
 ## 0.18.7-patch-10.1
-2022-11-24
+2022-12-7
 - Added logging in a catch block with no logging
+- Removed subflow ID auto-generation
 
 ## 0.18.7-patch-10
 2021-07-14
