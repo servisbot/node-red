@@ -9,6 +9,8 @@ To make a change to the node-red runtime being used by K4 avalanche:
 6. Run `npm run build`
 7. Manually publish to NPM with `npm publish` - Request creds from ops for this
 
+Note: You need xcode installed to be able to install/build/publish this module properly
+
 
 # CHANGE-LOG
 
