@@ -13,7 +13,7 @@ To make a change to the node-red runtime being used by K4 avalanche:
 # CHANGE-LOG
 
 ## 0.18.7-patch-10.1
-2022-11-24
+2022-12-7
 - Added logging in a catch block with no logging
 - Removed subflow ID auto-generation
 
