@@ -366,7 +366,12 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
                 })
             } else {
                 for (var prop in node) {
-                    if (node.hasOwnProperty(prop) && prop !== '_alias') {
+                    // Wires is  an array of arrays of strings  [['string']], 
+                    // so it never makes sense to replace it to be a single string on line 377
+                    // Because we don't generate new ID's we get hit with a little bit of javascript weirdness on line 375
+                    // const item = {'a':1,'b':2}
+                    // console.log(item[[['a']]]) // Returns 1
+                    if (node.hasOwnProperty(prop) && prop !== '_alias' && prop !== 'wires') {
                         if (node_map[node[prop]]) {
                             //console.log("Mapped",node.type,node.id,prop,node_map[node[prop]].id);
                             node[prop] = node_map[node[prop]].id;
