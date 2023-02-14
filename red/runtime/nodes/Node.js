@@ -123,7 +123,8 @@ Node.prototype.send = function(msg) {
     if (Number.isInteger(msg.nodeSendCounter)) {
         msg.nodeSendCounter += 1;
         if (msg.nodeSendCounter >= msg.MAXIMUM_NODE_SEND_COUNT) {
-          return;
+            msg.logger.info('Loop Detected, terminating conversation');
+            return;
         }
     }
 
