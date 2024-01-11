@@ -17,6 +17,13 @@
  const clone = require("clone");
  const PayloadValidator = require("../../PayloadValidator");
  
+ /*
+ * Codefile collects a list of calls to msg.servisbot.log
+ * the list of calls and their arguments are passed back to the node in the form
+ * [action, [arg1, arg2,...]] where action is the function that was called eg. log
+ * We need to iterate over these actions and perform them in the node as the lambda
+ * does not have permissions to run these types of functions
+ */
  const processServisbotActions = (originalMessage, message) => {
    if (message.servisbot && message.servisbot.actions && Array.isArray(message.servisbot.actions) && message.servisbot.actions.length > 0) {
      message.servisbot.actions.forEach((action) => {
