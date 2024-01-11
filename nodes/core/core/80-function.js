@@ -22,7 +22,7 @@
      message.servisbot.actions.forEach((action) => {
        const [func, args] = action;
        if (originalMessage && originalMessage.servisbot && originalMessage.servisbot[func]) {
-         originalMessage.servisbot[func](args);
+         originalMessage.servisbot[func](...args);
        }
      });
    }
@@ -79,30 +79,34 @@
        }ms`,
      };
      if (result) {
-       const payloadValidator = new PayloadValidator(msg, node.id);
-       payloadValidator.verify(result);
-       // Re-attach logger to msgs as they get lost when passing over to the lambda
-       let messageToForward = result;
-       if (Array.isArray(result)) {
-         // Array result, re-attach logger and process any servisbot.log actions returned from the lambda
-         messageToForward = result.map((_res) => {
-           if (_res !== null && typeof _res === 'object') {
-             _res.logger = logger;
-             processServisbotActions(msg, _res);
-             if (msg.servisbot) {
-               _res.servisbot = msg.servisbot;
-             }
-           }
-           return _res;
-         });
-       } else if (typeof result === 'object') {
-         result.logger = logger;
-         processServisbotActions(msg, result);
-         if (msg.servisbot) {
-           result.servisbot = msg.servisbot;
-         }
-       }
-       sendResults(node, msg._msgid, messageToForward);
+       /*
+       * Uncomment the following block when we are happy to move to codefile lambda and not process the
+       * payload within the node itself
+       */
+       // const payloadValidator = new PayloadValidator(msg, node.id);
+       // payloadValidator.verify(result);
+       // // Re-attach logger to msgs as they get lost when passing over to the lambda
+       // let messageToForward = result;
+       // if (Array.isArray(result)) {
+       //   // Array result, re-attach logger and process any servisbot.log actions returned from the lambda
+       //   messageToForward = result.map((_res) => {
+       //     if (_res !== null && typeof _res === 'object') {
+       //       _res.logger = logger;
+       //       processServisbotActions(msg, _res);
+       //       if (msg.servisbot) {
+       //         _res.servisbot = msg.servisbot;
+       //       }
+       //     }
+       //     return _res;
+       //   });
+       // } else if (typeof result === 'object') {
+       //   result.logger = logger;
+       //   processServisbotActions(msg, result);
+       //   if (msg.servisbot) {
+       //     result.servisbot = msg.servisbot;
+       //   }
+       // }
+       // sendResults(node, msg._msgid, messageToForward);
      } else {
        metrics.error = error;
        metrics.action = 'codefile-error';
@@ -333,12 +337,12 @@
            const payloadValidator = new PayloadValidator(msg, this.id);
            var start = process.hrtime();
            sandbox.msg = msg;
-           // const vm2Instance = new vm2.VM({ sandbox, timeout: 5000 });
+           const vm2Instance = new vm2.VM({ sandbox, timeout: 5000 });
            const beforeVm2 = process.hrtime();
-           // const result = vm2Instance.run(functionText);
+           const result = vm2Instance.run(functionText);
            const afterVm2 = process.hrtime(beforeVm2);
-           // payloadValidator.verify(result);
-           // sendResults(this, msg._msgid, result);
+           payloadValidator.verify(result);
+           sendResults(this, msg._msgid, result);
            const logger = clone(msg.logger);
  
            const {
