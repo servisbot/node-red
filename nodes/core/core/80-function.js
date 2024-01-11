@@ -35,6 +35,15 @@
    }
  }
  
+
+/*
+ * Pass the original message payload to the codefile lambda
+ * and process the result from the lambda
+ * - as some function nodes reference context that is not available within the lambda
+ *   we emulate that context and pass the result back to the node to process
+ *   we then need to stitch that context back into the original message before passing to the next
+ *   node, or that context will be lost.
+ */
  const handleCodeFile = async (node, sendResults, {
    logger, msg, codefile, afterVm2
  }) => {
