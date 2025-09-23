@@ -418,8 +418,21 @@ function registerNodeConstructor(nodeSet,type,constructor) {
     events.emit("type-registered",type);
 }
 
-function getAllNodeConfigs(lang) {
-    if (!nodeConfigCache) {
+/**
+ * Get all node configurations for a specific organization and flow.
+ * @param {string} lang - The language to use for the configuration.
+ * @param {string} orgId - The ID of the organization.
+ * @param {string} flowId - The ID of the flow.
+ * @returns {object} - The node configurations for the specified organization and flow.
+ */
+function getAllNodeConfigs(lang, orgId, flowId) {
+    var hasOrgFlowCache = false;
+
+    if (orgId && flowId) {
+        hasOrgFlowCache = !nodeConfigCache[orgId] && !nodeConfigCache[orgId][flowId];
+    }
+
+    if (!nodeConfigCache || !hasOrgFlowCache) {
         var result = "";
         var script = "";
         for (var i=0;i<nodeList.length;i++) {
@@ -437,8 +450,16 @@ function getAllNodeConfigs(lang) {
         //    result += UglifyJS.minify(script, {fromString: true}).code;
         //    result += '</script>';
         //}
-        nodeConfigCache = result;
+
+        if (orgId && flowId) {
+            nodeConfigCache = nodeConfigCache || {};
+            nodeConfigCache[orgId] = nodeConfigCache[orgId] || {};
+            nodeConfigCache[orgId][flowId] = result;
+        } else {
+            nodeConfigCache = result;
+        }
     }
+
     return nodeConfigCache;
 }
 
