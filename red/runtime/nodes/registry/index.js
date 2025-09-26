@@ -84,5 +84,9 @@ module.exports = {
 
     cleanModuleList: registry.cleanModuleList,
 
+    // Performance monitoring functions
+    getCacheStats: registry.getCacheStats,
+    clearCache: registry.clearCache,
+
     paletteEditorEnabled: installer.paletteEditorEnabled
 };

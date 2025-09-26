@@ -29,6 +29,7 @@ var Node;
 var loader;
 
 var nodeConfigCache = null;
+var cacheStats = { size: 0, orgFlowEntries: 0 };
 var moduleConfigs = {};
 var nodeList = [];
 var nodeConstructors = {};
@@ -455,8 +456,22 @@ function getAllNodeConfigs(lang, orgId, flowId) {
             nodeConfigCache = nodeConfigCache || {};
             nodeConfigCache[orgId] = nodeConfigCache[orgId] || {};
             nodeConfigCache[orgId][flowId] = result;
+            // Track cache growth
+            cacheStats.orgFlowEntries = Object.keys(nodeConfigCache).reduce((total, org) => {
+                return total + Object.keys(nodeConfigCache[org]).length;
+            }, 0);
+            
+            // Emergency fix: Auto-clear cache much more aggressively for large configs
+            if (cacheStats.orgFlowEntries > 25) {  // Reduced from 50 to 25
+                console.log(`[Registry] Auto-clearing cache with ${cacheStats.orgFlowEntries} entries (emergency memory pressure prevention)`);
+                nodeConfigCache = {};
+                nodeConfigCache[orgId] = {};
+                nodeConfigCache[orgId][flowId] = result;
+                cacheStats.orgFlowEntries = 1;
+            }
         } else {
             nodeConfigCache = result;
+            cacheStats.size = 1;
         }
     }
 
@@ -705,6 +720,21 @@ var registry = module.exports = {
      */
     getAllNodeConfigs: getAllNodeConfigs,
     getNodeConfig: getNodeConfig,
+    
+    // Simple cache monitoring
+    getCacheStats: function() {
+        return {
+            size: cacheStats.size,
+            orgFlowEntries: cacheStats.orgFlowEntries,
+            totalMemoryEstimate: JSON.stringify(nodeConfigCache || '').length
+        };
+    },
+
+    // Quick win: Simple cache clearing when it gets too large
+    clearCache: function() {
+        nodeConfigCache = null;
+        cacheStats = { size: 0, orgFlowEntries: 0 };
+    },
 
     getTypeId: getTypeId,
 
