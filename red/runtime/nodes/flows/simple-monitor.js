@@ -99,14 +99,50 @@ class SimpleFlowMonitor {
             }
         }
     }
+    
+    // ANTI-SLOWDOWN: Detect gradual memory growth trends
+    detectMemoryTrend() {
+        if (this.memoryHistory.length < 10) return;
+        
+        const recent = this.memoryHistory.slice(-10);
+        const early = recent.slice(0, 5);
+        const late = recent.slice(-5);
+        
+        const earlyAvg = early.reduce((sum, m) => sum + m.heapUsed, 0) / early.length;
+        const lateAvg = late.reduce((sum, m) => sum + m.heapUsed, 0) / late.length;
+        
+        const growthMB = (lateAvg - earlyAvg) / (1024 * 1024);
+        const growthPercent = (growthMB / (earlyAvg / (1024 * 1024))) * 100;
+        
+        // If memory has grown significantly (>20MB and >15%) in recent operations
+        if (growthMB > 20 && growthPercent > 15) {
+            console.warn(`[FlowMonitor] MEMORY TREND WARNING: Detected ${Math.round(growthMB)}MB growth (${Math.round(growthPercent)}%) over recent operations. Consider aggressive cache cleanup.`);
+            
+            // Return trending info for potential use by callers
+            return {
+                trending: 'up',
+                growthMB: Math.round(growthMB),
+                growthPercent: Math.round(growthPercent),
+                currentHeapMB: Math.round(lateAvg / (1024 * 1024))
+            };
+        }
+        
+        return { trending: 'stable' };
+    }
 
     getStats() {
         const currentMemory = process.memoryUsage();
+        const memoryTrend = this.memoryHistory.length >= 10 ? this.detectMemoryTrend() : { trending: 'insufficient-data' };
+        
         return {
             operationCount: this.operationCount,
             runtime: Date.now() - this.startTime,
             heapUsed: Math.round(currentMemory.heapUsed / 1024 / 1024),
-            cacheSize: this.cacheSize
+            heapTotal: Math.round(currentMemory.heapTotal / 1024 / 1024),
+            cacheSize: this.cacheSize,
+            memoryTrend: memoryTrend,
+            baselineHeapMB: Math.round(this.baselineMemory / 1024 / 1024),
+            memoryGrowthFromBaseline: Math.round((currentMemory.heapUsed - this.baselineMemory) / 1024 / 1024)
         };
     }
 }
