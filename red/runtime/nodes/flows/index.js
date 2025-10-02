@@ -369,7 +369,6 @@ function setFlows(_config,type,muteLog,forceStart) {
             credentials.export().then(function(creds) {
                 setFlows._lastCredsExport = Date.now();
                 setFlows._lastCreds = creds;
-                monitor.logOperation('setFlows-credentials-export-end');
                 return creds;
             });
         
