@@ -419,23 +419,10 @@ function registerNodeConstructor(nodeSet,type,constructor) {
     events.emit("type-registered",type);
 }
 
-/**
- * Get all node configurations for a specific organization and flow.
- * @param {string} lang - The language to use for the configuration.
- * @param {string} orgId - The ID of the organization.
- * @param {string} flowId - The ID of the flow.
- * @returns {object} - The node configurations for the specified organization and flow.
- */
-function getAllNodeConfigs(lang, orgId, flowId) {
-    var hasOrgFlowCache = false;
-
-    if (orgId && flowId) {
-        hasOrgFlowCache = !nodeConfigCache[orgId] && !nodeConfigCache[orgId][flowId];
-    }
-
-    if (!nodeConfigCache || !hasOrgFlowCache) {
+function getAllNodeConfigs(lang) {
+    if (!nodeConfigCache) {
         var result = "";
-        var script = "";
+        // var script = "";
         for (var i=0;i<nodeList.length;i++) {
             var id = nodeList[i];
             var config = moduleConfigs[getModule(id)].nodes[getNode(id)];
@@ -452,27 +439,8 @@ function getAllNodeConfigs(lang, orgId, flowId) {
         //    result += '</script>';
         //}
 
-        if (orgId && flowId) {
-            nodeConfigCache = nodeConfigCache || {};
-            nodeConfigCache[orgId] = nodeConfigCache[orgId] || {};
-            nodeConfigCache[orgId][flowId] = result;
-            // Track cache growth
-            cacheStats.orgFlowEntries = Object.keys(nodeConfigCache).reduce((total, org) => {
-                return total + Object.keys(nodeConfigCache[org]).length;
-            }, 0);
-            
-            // Emergency fix: Auto-clear cache much more aggressively for large configs
-            if (cacheStats.orgFlowEntries > 25) {  // Reduced from 50 to 25
-                console.log(`[Registry] Auto-clearing cache with ${cacheStats.orgFlowEntries} entries (emergency memory pressure prevention)`);
-                nodeConfigCache = {};
-                nodeConfigCache[orgId] = {};
-                nodeConfigCache[orgId][flowId] = result;
-                cacheStats.orgFlowEntries = 1;
-            }
-        } else {
-            nodeConfigCache = result;
-            cacheStats.size = 1;
-        }
+        nodeConfigCache = result;
+        cacheStats.size = 1;
     }
 
     return nodeConfigCache;

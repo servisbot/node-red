@@ -33,9 +33,7 @@ module.exports = {
         } else {
             var lang = apiUtils.determineLangFromHeaders(req.acceptsLanguages());
             log.audit({event: "nodes.configs.get"},req);
-            var orgId = req.params.orgId;
-            var flowId = req.params.flowId;
-            res.send(redNodes.getNodeConfigs(lang, orgId, flowId));
+            res.send(redNodes.getNodeConfigs(lang));
         }
     },
 

@@ -44,7 +44,6 @@ module.exports = {
         adminApp.put("/flow/:id",needsPermission("flows.write"),flow.put,apiUtil.errorHandler);
 
         // Nodes
-        adminApp.get("/nodes/:orgId/:flowId",needsPermission("nodes.read"),nodes.getAll,apiUtil.errorHandler);
         adminApp.get("/nodes",needsPermission("nodes.read"),nodes.getAll,apiUtil.errorHandler);
         adminApp.post("/nodes",needsPermission("nodes.write"),nodes.post,apiUtil.errorHandler);
         adminApp.get(/\/nodes\/((@[^\/]+\/)?[^\/]+)$/,needsPermission("nodes.read"),nodes.getModule,apiUtil.errorHandler);
