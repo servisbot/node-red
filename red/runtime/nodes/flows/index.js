@@ -29,8 +29,6 @@ var events = require("../../events");
 var redUtil = require("../../util");
 var deprecated = require("../registry/deprecated");
 
-// Simple monitoring
-const monitor = require('./simple-monitor');
 const nodeCache = require('./node-cache');
 
 var storage = null;
@@ -50,14 +48,11 @@ var typeEventRegistered = false;
 
 // Smart parseConfig with flow-level and node-level caching for large configurations
 function parseConfigWithNodeCache(config) {
-    // OPTIMIZATION 1: Try flow-level cache first (fastest)
     var cachedFlowConfig = nodeCache.getCachedFlowConfig(config);
     if (cachedFlowConfig) {
         return cachedFlowConfig;
     }
-    
-    // OPTIMIZATION 2: Node-level caching (for partial matches)
-    // For configs with 99%+ identical nodes, this can provide massive speedups
+
     var optimizedConfig = config.map(function(node) {
         if (!node || !node.id) return node;
         
@@ -68,16 +63,13 @@ function parseConfigWithNodeCache(config) {
             }
         }
         
-        // Clone and cache the node for future use
         var clonedNode = clone(node);
         nodeCache.cacheNode(node.id, clonedNode);
         return clonedNode;
     });
     
-    // Parse the config and cache the result
     var parsedConfig = flowUtil.parseConfig(optimizedConfig);
     
-    // Cache the complete parsed config for future use
     nodeCache.cacheFlowConfig(config, parsedConfig);
     
     return parsedConfig;
@@ -150,39 +142,26 @@ function setFlows(_config,type,muteLog,forceStart) {
     var operationId = Math.random().toString(36).substring(7);
     var setFlowsStartTime = Date.now();
     
-    // DIAGNOSTICS: Detect queueing/sequencing issues
     if (!setFlows._lastCallTime) setFlows._lastCallTime = Date.now();
-    var timeSinceLastCall = Date.now() - setFlows._lastCallTime;
     setFlows._lastCallTime = Date.now();
     
-    // ANTI-SLOWDOWN: Aggressive periodic cleanup to prevent gradual performance degradation
-    // This addresses the accumulation of cached data over many requests
     var currentMemory = process.memoryUsage();
     var heapMB = currentMemory.heapUsed / 1024 / 1024;
     var shouldPeriodicCleanup = false;
     
-    // Every 25th operation (reduced from 50) or when memory exceeds 200MB (reduced from 300MB), do aggressive cleanup
     if (!setFlows._operationCounter) setFlows._operationCounter = 0;
     setFlows._operationCounter++;
     
     if (setFlows._operationCounter % 25 === 0 || heapMB > 200) {
         shouldPeriodicCleanup = true;
         
-        var cleanupStart = Date.now();
-        
-        // EMERGENCY: 876MB is way too high - be much more aggressive
         if (heapMB > 600) {
-            console.log(`[SlowOpDiag] EMERGENCY MEMORY PRESSURE ${Math.round(heapMB)}MB - aggressive cleanup`);
-            // Full clear of all caches at extreme memory pressure
             if (typeRegistry.clearCache) {
                 typeRegistry.clearCache();
             }
-            nodeCache.clear(false); // Full clear, not partial
+            nodeCache.clear(false);
             
-            // NUCLEAR OPTION: Clear active flow config to force full rebuild
             if (heapMB > 700) {
-                console.log(`[SlowOpDiag] NUCLEAR CLEANUP ${Math.round(heapMB)}MB - clearing caches but preserving structure`);
-                // Instead of setting to null, clear the contents but preserve structure
                 if (activeFlowConfig) {
                     if (activeFlowConfig.allNodes) {
                         for (var nodeId in activeFlowConfig.allNodes) {
@@ -191,10 +170,8 @@ function setFlows(_config,type,muteLog,forceStart) {
                     }
                     if (activeFlowConfig.subflows) {
                         for (var subflowId in activeFlowConfig.subflows) {
-                            // Don't delete subflow objects, just clear their contents but preserve structure
                             if (activeFlowConfig.subflows[subflowId]) {
                                 var subflow = activeFlowConfig.subflows[subflowId];
-                                // Clear contents but preserve expected properties
                                 if (subflow.nodes) {
                                     for (var nodeId in subflow.nodes) {
                                         delete subflow.nodes[nodeId];
@@ -205,7 +182,6 @@ function setFlows(_config,type,muteLog,forceStart) {
                                         delete subflow.configs[configId];
                                     }
                                 }
-                                // Preserve instances array structure - just clear it
                                 subflow.instances = [];
                                 subflow.nodes = {};
                                 subflow.configs = {};
@@ -214,15 +190,12 @@ function setFlows(_config,type,muteLog,forceStart) {
                     }
                     if (activeFlowConfig.configs) {
                         for (var configId in activeFlowConfig.configs) {
-                            // Clear config contents but preserve structure if needed
                             delete activeFlowConfig.configs[configId];
                         }
-                        // Keep as empty object, not undefined
                         activeFlowConfig.configs = {};
                     }
                     if (activeFlowConfig.flows) {
                         for (var flowId in activeFlowConfig.flows) {
-                            // Clear flow contents but preserve any required structure
                             var flow = activeFlowConfig.flows[flowId];
                             if (flow && flow.nodes) {
                                 for (var nodeId in flow.nodes) {
@@ -240,60 +213,41 @@ function setFlows(_config,type,muteLog,forceStart) {
                                 flow.subflows = {};
                             }
                         }
-                        // Keep flows object structure
                         activeFlowConfig.flows = {};
                     }
-                    // Clear arrays but keep them as empty arrays, not null
                     activeFlowConfig.missingTypes = [];
                 }
-                // Don't set activeConfig to null - just clear flows array
                 if (activeConfig && activeConfig.flows) {
-                    activeConfig.flows.length = 0; // Clear array but keep it as array
+                    activeConfig.flows.length = 0;
                 }
             }
             
-            // Force multiple GC cycles for severe memory pressure
             if (global.gc) {
                 global.gc();
-                // Force immediate GC with setImmediate
                 setImmediate(() => {
                     if (global.gc) {
                         global.gc();
-                        console.log(`[SlowOpDiag] Forced GC completed, heap now: ${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB`);
                     }
                 });
             }
         } else {
-            // Clear registry cache more aggressively to prevent long-term accumulation
             if (typeRegistry.clearCache) {
                 typeRegistry.clearCache();
             }
             
             // Periodic node cache cleanup - keep only most recent entries
             var nodeCacheStats = nodeCache.getStats();
-            if (nodeCacheStats.size > 5000) { // Much lower threshold for periodic cleanup
-                // Use partial clear instead of full clear to maintain some cache benefit
-                nodeCache.clear(true); // Partial clear - keeps newest 30% of entries
+            if (nodeCacheStats.size > 5000) {
+                nodeCache.clear(true);
             }
-            
-            // Force garbage collection if available
+
             if (global.gc && (heapMB > 250 || setFlows._operationCounter % 100 === 0)) {
                 global.gc();
             }
         }
-        console.log(`[SlowOpDiag] Cleanup completed in ${Date.now() - cleanupStart}ms`);
     }
-    
-    monitor.logOperation('setFlows-start', { 
-        type: type, 
-        configSize: _config ? _config.length : 0, 
-        operationId: operationId,
-        periodicCleanup: shouldPeriodicCleanup,
-        heapMB: Math.round(heapMB),
-        operationCount: setFlows._operationCounter
-    });
-    
-    type = type||"full";
+
+    type = type || "full";
 
     var configSavePromise = null;
     var config = null;
@@ -302,40 +256,26 @@ function setFlows(_config,type,muteLog,forceStart) {
     var isLoad = false;
     if (type === "load") {
         isLoad = true;
-        console.log(`[SlowOpDiag] LOAD PATH: Starting loadFlows() for ${operationId}`);
-        var loadStart = Date.now();
         configSavePromise = loadFlows().then(function(_config) {
-            var loadTime = Date.now() - loadStart;
-            console.log(`[SlowOpDiag] loadFlows() took ${loadTime}ms for ${operationId}`);
-            monitor.logOperation('setFlows-load-clone', { configSize: _config.flows.length });
             config = clone(_config.flows);
             newFlowConfig = flowUtil.parseConfig(clone(config));
             type = "full";
             return _config.rev;
         });
     } else {
-        monitor.logOperation('setFlows-config-clone-start', { configSize: _config.length });
         var cloneStart = Date.now();
-        
-        // EMERGENCY OPTIMIZATION: Reduce clone overhead for large configs
+
         if (_config.length > 3000) {
-            console.log(`[SlowOpDiag] LARGE CONFIG DETECTED (${_config.length} nodes) - using optimized cloning`);
-            // For very large configs, try a more efficient clone approach
             try {
-                // Use JSON parse/stringify for large configs - often faster than deep clone for large objects
                 config = JSON.parse(JSON.stringify(_config));
             } catch (e) {
-                // Fallback to regular clone if JSON approach fails
+                console.warn(`[SlowOpDiag] JSON clone failed, falling back to regular clone for ${_config.length} nodes`, e);
                 config = clone(_config);
             }
         } else {
             config = clone(_config);
         }
-        
-        var cloneTime = Date.now() - cloneStart;
-        console.log(`[SlowOpDiag] Config clone took ${cloneTime}ms for ${config.length} nodes`);
-        monitor.logOperation('setFlows-config-clone-end', { configSize: config.length, cloneTime: cloneTime });
-        
+
         // Quick check: if config is identical to activeConfig, skip expensive operations
         var configHash = null;
         var configUnchanged = false;
@@ -344,7 +284,6 @@ function setFlows(_config,type,muteLog,forceStart) {
         if (activeConfig && activeConfig.flows) {            
             // For large configs (1000+ nodes), do a comprehensive hash comparison
             if (config.length > 1000) {
-                // Create a more comprehensive hash for better change detection
                 var nodeIds = config.map(n => n.id || 'none').sort().join(',');
                 var nodeTypes = config.map(n => n.type || 'none').sort().join(',');
                 configHash = config.length + '-' + nodeIds.substring(0, 100) + '-' + nodeTypes.substring(0, 100);
@@ -352,8 +291,7 @@ function setFlows(_config,type,muteLog,forceStart) {
                 var activeNodeIds = activeConfig.flows.map(n => n.id || 'none').sort().join(',');
                 var activeNodeTypes = activeConfig.flows.map(n => n.type || 'none').sort().join(',');  
                 var activeHash = activeConfig.flows.length + '-' + activeNodeIds.substring(0, 100) + '-' + activeNodeTypes.substring(0, 100);
-                
-                // Check if identical first
+
                 configUnchanged = (configHash === activeHash);
                 
                 // Batch optimization: if configs are very similar (80%+ same node IDs), use aggressive caching
@@ -364,154 +302,71 @@ function setFlows(_config,type,muteLog,forceStart) {
                     var intersection = new Set([...currentIds].filter(id => activeIds.has(id)));
                     var similarity = intersection.size / Math.max(currentIds.size, activeIds.size);
                     
-                    if (similarity > 0.8) { // 80%+ similar
+                    if (similarity > 0.8) {
                         batchOptimization = true;
                     }
                 }
             } else {
-                // For smaller configs, use simpler comparison
                 if (config.length === activeConfig.flows.length) {
                     configUnchanged = JSON.stringify(config).length === JSON.stringify(activeConfig.flows).length;
                 }
             }
-            monitor.logOperation('setFlows-config-unchanged-check', { 
-                configUnchanged: configUnchanged, 
-                batchOptimization: batchOptimization,
-                configSize: config.length 
-            });
         }
-        
-        monitor.logOperation('setFlows-parseConfig-start', { configSize: config.length, nodeEstimate: config.length });
-        var parseStart = Date.now();
-        
-        // Emergency optimization: if config appears unchanged and it's large, reuse existing parsed config
+
         if (configUnchanged && config.length > 1000 && activeFlowConfig) {
-            console.log(`[SlowOpDiag] USING UNCHANGED CONFIG OPTIMIZATION for ${config.length} nodes`);
-            newFlowConfig = activeFlowConfig; // Reuse existing parsed config
-            monitor.logOperation('setFlows-parseConfig-skipped', { nodeCount: Object.keys(newFlowConfig.allNodes || {}).length });
+            newFlowConfig = activeFlowConfig;
         } else if (batchOptimization && activeFlowConfig) {
-            // Batch optimization: for very similar configs, use smart parsing with heavy caching
-            console.log(`[SlowOpDiag] USING BATCH OPTIMIZATION for ${config.length} nodes`);
             newFlowConfig = parseConfigWithNodeCache(config);
-            monitor.logOperation('setFlows-parseConfig-batch-optimized', { 
-                nodeCount: Object.keys(newFlowConfig.allNodes || {}).length,
-                cacheStats: nodeCache.getStats()
-            });
         } else {
-            console.log(`[SlowOpDiag] USING STANDARD PROCESSING for ${config.length} nodes (unchanged: ${configUnchanged}, batchOpt: ${batchOptimization})`);
-            // Smart node-level caching for large configs
             if (config.length > 1000) {
-                monitor.logOperation('setFlows-parseConfig-smart-start', { configSize: config.length });
                 newFlowConfig = parseConfigWithNodeCache(config);
-                monitor.logOperation('setFlows-parseConfig-smart-end', { 
-                    nodeCount: Object.keys(newFlowConfig.allNodes || {}).length,
-                    cacheStats: nodeCache.getStats()
-                });
             } else {
                 newFlowConfig = flowUtil.parseConfig(clone(config));
-                monitor.logOperation('setFlows-parseConfig-end', { nodeCount: Object.keys(newFlowConfig.allNodes || {}).length });
             }
         }
-        
-        var parseTime = Date.now() - parseStart;
-        console.log(`[SlowOpDiag] Config parsing took ${parseTime}ms for ${config.length} nodes`);
-        
-        monitor.logOperation('setFlows-diffConfigs-start', { configUnchanged: configUnchanged, batchOptimization: batchOptimization });
+
         var diffStart = Date.now();
         
-        // Emergency optimization: skip expensive diff if config appears unchanged
         if (configUnchanged && activeFlowConfig) {
-            console.log(`[SlowOpDiag] SKIPPING DIFF - config unchanged`);
             diff = { added: [], changed: [], removed: [], rewired: [] }; // Empty diff
-            monitor.logOperation('setFlows-diffConfigs-skipped');
         } else if (batchOptimization && activeFlowConfig) {
-            // Batch optimization: for similar configs, use incremental diff
-            console.log(`[SlowOpDiag] USING BATCH DIFF OPTIMIZATION`);
             var cachedDiff = nodeCache.getCachedDiff(activeFlowConfig, newFlowConfig);
             if (cachedDiff) {
-                console.log(`[SlowOpDiag] DIFF CACHE HIT`);
                 diff = cachedDiff;
-                monitor.logOperation('setFlows-diffConfigs-cached', {
-                    added: cachedDiff.added ? cachedDiff.added.length : 0,
-                    changed: cachedDiff.changed ? cachedDiff.changed.length : 0,
-                    removed: cachedDiff.removed ? cachedDiff.removed.length : 0
-                });
             } else {
-                // Force incremental diff for batch operations - much faster
                 diff = nodeCache.computeIncrementalDiff(activeFlowConfig, newFlowConfig) || 
                        flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
                 nodeCache.cacheDiff(activeFlowConfig, newFlowConfig, diff);
-                monitor.logOperation('setFlows-diffConfigs-batch-incremental', { 
-                    added: diff.added ? diff.added.length : 0,
-                    changed: diff.changed ? diff.changed.length : 0,
-                    removed: diff.removed ? diff.removed.length : 0
-                });
             }
         } else {
-            // Try diff cache first
             var cachedDiff = nodeCache.getCachedDiff(activeFlowConfig, newFlowConfig);
             if (cachedDiff) {
                 diff = cachedDiff;
-                monitor.logOperation('setFlows-diffConfigs-cached', {
-                    added: diff.added ? diff.added.length : 0,
-                    changed: diff.changed ? diff.changed.length : 0,
-                    removed: diff.removed ? diff.removed.length : 0
-                });
             } else {
                 var diffStart = Date.now();
                 diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
-                var diffTime = Date.now() - diffStart;
                 
-                // Cache the diff result for future use
                 nodeCache.cacheDiff(activeFlowConfig, newFlowConfig, diff);
-                
-                monitor.logOperation('setFlows-diffConfigs-end', { 
-                    added: diff.added ? diff.added.length : 0,
-                    changed: diff.changed ? diff.changed.length : 0,
-                    removed: diff.removed ? diff.removed.length : 0,
-                    diffTime: diffTime
-                });
             }
         }
-        
-        var diffTime = Date.now() - diffStart;
-        console.log(`[SlowOpDiag] Config diff took ${diffTime}ms`);
 
-        // Now the flows have been compared, remove any credentials from newFlowConfig
-        // so they don't cause false-positive diffs the next time a flow is deployed
-        monitor.logOperation('setFlows-credentials-cleanup-start');
-        var credStart = Date.now();
-        
         for (var id in newFlowConfig.allNodes) {
             if (newFlowConfig.allNodes.hasOwnProperty(id)) {
                 delete newFlowConfig.allNodes[id].credentials;
             }
         }
-        var credTime = Date.now() - credStart;
-        console.log(`[SlowOpDiag] Credentials cleanup took ${credTime}ms for ${Object.keys(newFlowConfig.allNodes || {}).length} nodes`);
-        monitor.logOperation('setFlows-credentials-cleanup-end', { credTime: credTime });
 
-        var credsStart = Date.now();
         credentials.clean(config);
         var credsDirty = credentials.dirty();
-        var credsCleanTime = Date.now() - credsStart;
-        console.log(`[SlowOpDiag] credentials.clean() took ${credsCleanTime}ms, credsDirty: ${credsDirty}`);
-        
-        monitor.logOperation('setFlows-credentials-export-start');
-        var credsExportStart = Date.now();
-        
-        // OPTIMIZATION: Skip credentials export if not dirty and we've already exported recently
+
         var skipCredsExport = false;
         if (!credsDirty && setFlows._lastCredsExport && (Date.now() - setFlows._lastCredsExport) < 5000) {
             skipCredsExport = true;
-            console.log(`[SlowOpDiag] SKIPPING credentials.export() - not dirty and recent export`);
         }
         
         configSavePromise = skipCredsExport ? 
             Promise.resolve(setFlows._lastCreds || {}) :
             credentials.export().then(function(creds) {
-                var exportTime = Date.now() - credsExportStart;
-                console.log(`[SlowOpDiag] credentials.export() took ${exportTime}ms (creds: ${creds ? Object.keys(creds).length : 0})`);
                 setFlows._lastCredsExport = Date.now();
                 setFlows._lastCreds = creds;
                 monitor.logOperation('setFlows-credentials-export-end');
@@ -519,28 +374,22 @@ function setFlows(_config,type,muteLog,forceStart) {
             });
         
         configSavePromise = configSavePromise.then(function(creds) {
-            var storageStart = Date.now();
             var saveConfig = {
                 flows: config,
                 credentialsDirty:credsDirty,
                 credentials: creds
             }
-            monitor.logOperation('setFlows-storage-save-start');
-            
-            // ANTI-CONTENTION: Add small delay if multiple storage operations are concurrent
+
             var delay = 0;
             if (!storage._lastSaveTime) storage._lastSaveTime = 0;
             var timeSinceLastSave = Date.now() - storage._lastSaveTime;
-            if (timeSinceLastSave < 100) { // If last save was <100ms ago
+            if (timeSinceLastSave < 100) {
                 delay = Math.min(50, 100 - timeSinceLastSave); // Small delay to reduce contention
-                console.log(`[SlowOpDiag] Adding ${delay}ms delay to reduce storage contention`);
             }
             
             return new Promise(resolve => setTimeout(resolve, delay)).then(() => {
                 storage._lastSaveTime = Date.now();
                 return storage.saveFlows(saveConfig).then(function(result) {
-                    var storageTime = Date.now() - storageStart;
-                    console.log(`[SlowOpDiag] storage.saveFlows() took ${storageTime}ms`);
                     return result;
                 });
             });
@@ -549,8 +398,6 @@ function setFlows(_config,type,muteLog,forceStart) {
 
     return configSavePromise
         .then(function(flowRevision) {
-            console.log(`[SlowOpDiag] configSavePromise resolved for ${operationId}`);
-            monitor.logOperation('setFlows-storage-save-end', { flowRevision: flowRevision });
             if (!isLoad) {
                 log.debug("saved flow revision: "+flowRevision);
             }
@@ -560,44 +407,18 @@ function setFlows(_config,type,muteLog,forceStart) {
             };
             activeFlowConfig = newFlowConfig;
             if (forceStart || started) {
-                console.log(`[SlowOpDiag] Starting stop() operation for ${operationId}`);
-                var stopStartTime = Date.now();
-                monitor.logOperation('setFlows-stop-start');
                 return stop(type,diff,muteLog).then(function() {
-                    var stopTime = Date.now() - stopStartTime;
-                    console.log(`[SlowOpDiag] stop() completed in ${stopTime}ms for ${operationId}`);
-                    monitor.logOperation('setFlows-stop-end');
-                    
                     context.clean(activeFlowConfig);
-                    
-                    console.log(`[SlowOpDiag] Starting start() operation for ${operationId}`);
-                    var startStartTime = Date.now();
-                    monitor.logOperation('setFlows-start-begin');
+
                     return start(type,diff,muteLog).then(function() {
-                        var startTime = Date.now() - startStartTime;
-                        console.log(`[SlowOpDiag] start() completed in ${startTime}ms for ${operationId}`);
-                        monitor.logOperation('setFlows-start-complete');
                         events.emit("runtime-event",{id:"runtime-deploy",payload:{revision:flowRevision},retain: true});
-                        
-                        var totalTime = Date.now() - setFlowsStartTime;
-                        console.log(`[SlowOpDiag] === COMPLETED setFlows ${operationId} === Total time: ${totalTime}ms`);
-                        
-                        // FAIL-SAFE: If operation took >1000ms, log a warning with memory info
-                        if (totalTime > 1000) {
-                            var currentMem = process.memoryUsage();
-                            console.log(`[SlowOpDiag] ⚠️  SLOW OPERATION WARNING: ${operationId} took ${totalTime}ms (heap: ${Math.round(currentMem.heapUsed/1024/1024)}MB)`);
-                        }
                         
                         return flowRevision;
                     });
-                }).catch(function(_err) {
-                    monitor.logOperation('setFlows-stop-error');
-                })
+                });
             } else {
                 events.emit("runtime-event",{id:"runtime-deploy",payload:{revision:flowRevision},retain: true});
             }
-            var totalTime = Date.now() - setFlowsStartTime;
-            console.log(`[SlowOpDiag] === COMPLETED setFlows ${operationId} === Total time: ${totalTime}ms (no start/stop)`);
             return flowRevision;
         });
 }
@@ -1012,11 +833,6 @@ function getFlow(id) {
 }
 
 function updateFlow(id,newFlow) {
-    monitor.logOperation('updateFlow-start', { flowId: id });
-    monitor.trackCacheSize(typeRegistry);
-    
-    // ANTI-SLOWDOWN: More aggressive periodic cleanup for updateFlow
-    // updateFlow is called repeatedly and is often the source of gradual slowdown
     if (!updateFlow._updateCounter) updateFlow._updateCounter = 0;
     updateFlow._updateCounter++;
     
@@ -1055,7 +871,6 @@ function updateFlow(id,newFlow) {
         // Quick win: For global updates, clear the registry cache proactively
         // to prevent memory accumulation during the expensive operation
         if (id === 'global' && typeRegistry.clearCache) {
-            monitor.logOperation('updateFlow-clear-cache', { flowId: id });
             typeRegistry.clearCache();
             
             // Also clear node cache periodically to prevent unbounded growth
@@ -1064,41 +879,33 @@ function updateFlow(id,newFlow) {
             }
         }
     }
-    
-    // Emergency fix: Check memory pressure and force cleanup if needed
-    if (heapMB > 400) {  // Your logs show 488-502MB, so trigger at 400MB
+
+    if (heapMB > 400) {
         typeRegistry.clearCache();
         
-        // Clear node cache too during high memory pressure
         if (heapMB > 450) {
-            nodeCache.clear(true); // Even under pressure, try partial clear first
+            nodeCache.clear(true);
         }
-        
-        // Force garbage collection if available (node --expose-gc)
+
         if (global.gc) {
             global.gc();
         }
     }
-    
-    monitor.logOperation('updateFlow-clone-start', { flowId: id });
-    // Quick win: Instead of cloning the entire config, just filter and modify
+
     var newConfig;
     if (id === 'global') {
-        // For global, we need the full config but we can filter without cloning first
         newConfig = activeConfig.flows.filter(function(node) {
             return node.type === 'tab' || (node.hasOwnProperty('z') && activeFlowConfig.flows.hasOwnProperty(node.z));
         }).map(function(node) {
-            return clone(node); // Clone individual nodes instead of entire array
+            return clone(node);
         });
     } else {
-        // For specific flows, we can be more targeted
         newConfig = activeConfig.flows.filter(function(node) {
             return node.z !== id && node.id !== id;
         }).map(function(node) {
-            return clone(node); // Clone individual nodes instead of entire array  
+            return clone(node);
         });
     }
-    monitor.logOperation('updateFlow-clone-end', { flowId: id, configSize: newConfig.length });
     
     var nodes;
 
@@ -1127,9 +934,7 @@ function updateFlow(id,newFlow) {
     }
 
     newConfig = newConfig.concat(nodes);
-    monitor.logOperation('updateFlow-setFlows-start', { flowId: id, totalNodes: newConfig.length });
     return setFlows(newConfig,'flows',true).then(function() {
-        monitor.logOperation('updateFlow-complete', { flowId: id });
         log.info(log._("nodes.flows.updated-flow",{label:(label?label+" ":"")+"["+id+"]"}));
     })
 }
@@ -1177,7 +982,6 @@ module.exports = {
      * Simple performance monitoring
      */
     getPerformanceStats: function() {
-        const stats = monitor.getStats();
         const registryStats = typeRegistry.getCacheStats ? typeRegistry.getCacheStats() : {};
         const nodeCacheStats = nodeCache.getStats();
         const memUsage = process.memoryUsage();
