@@ -183,76 +183,153 @@ module.exports = {
         return flow;
     },
 
-    // New function: Parse only new/changed nodes and merge with existing config
+    // Incremental parsing: Only process changed nodes while maintaining correctness
     parseConfigIncremental: function(existingFlowConfig, newNodes, removedNodeIds) {
-        // Start with existing config (shallow copy for main structure)
-        var flow = {
-            allNodes: Object.assign({}, existingFlowConfig.allNodes),
-            subflows: Object.assign({}, existingFlowConfig.subflows),
-            configs: Object.assign({}, existingFlowConfig.configs),
-            flows: Object.assign({}, existingFlowConfig.flows),
-            missingTypes: existingFlowConfig.missingTypes.slice() // Copy array
+        // Create new config with shallow copies of main structures but deep copies of containers
+        var newConfig = {
+            allNodes: {},
+            subflows: {},
+            configs: {},
+            flows: {},
+            missingTypes: []
         };
-
-        // Quick removal - just delete from allNodes and let the add phase rebuild containers
-        removedNodeIds.forEach(function(nodeId) {
-            delete flow.allNodes[nodeId];
-        });
-
-        // Quick addition - just add to allNodes and let existing parseConfig handle the rest
-        newNodes.forEach(function(node) {
-            flow.allNodes[node.id] = clone(node);
-        });
-
-        // Rebuild the container structures efficiently by only processing changed areas
-        var affectedFlows = new Set();
-        var affectedSubflows = new Set();
         
-        // Find which flows/subflows were affected
-        newNodes.concat(removedNodeIds.map(function(id) { 
-            return existingFlowConfig.allNodes[id] || { z: null }; 
-        })).forEach(function(node) {
-            if (node.z) {
-                if (flow.flows[node.z]) {
-                    affectedFlows.add(node.z);
-                } else if (flow.subflows[node.z]) {
-                    affectedSubflows.add(node.z);
+        // Shallow copy allNodes (except removed ones)
+        for (var nodeId in existingFlowConfig.allNodes) {
+            if (existingFlowConfig.allNodes.hasOwnProperty(nodeId) && removedNodeIds.indexOf(nodeId) === -1) {
+                newConfig.allNodes[nodeId] = existingFlowConfig.allNodes[nodeId];
+            }
+        }
+        
+        // Add new nodes
+        newNodes.forEach(function(node) {
+            newConfig.allNodes[node.id] = node;
+        });
+        
+        // Deep copy container structures to avoid mutation
+        for (var flowId in existingFlowConfig.flows) {
+            if (existingFlowConfig.flows.hasOwnProperty(flowId)) {
+                newConfig.flows[flowId] = {
+                    id: existingFlowConfig.flows[flowId].id,
+                    nodes: {},
+                    configs: {},
+                    subflows: {}
+                };
+                // Copy references (shallow)
+                for (var nodeId in existingFlowConfig.flows[flowId].nodes) {
+                    if (newConfig.allNodes[nodeId]) {
+                        newConfig.flows[flowId].nodes[nodeId] = newConfig.allNodes[nodeId];
+                    }
+                }
+                for (var configId in existingFlowConfig.flows[flowId].configs) {
+                    if (newConfig.allNodes[configId]) {
+                        newConfig.flows[flowId].configs[configId] = newConfig.allNodes[configId];
+                    }
+                }
+                for (var subflowId in existingFlowConfig.flows[flowId].subflows) {
+                    if (newConfig.allNodes[subflowId]) {
+                        newConfig.flows[flowId].subflows[subflowId] = newConfig.allNodes[subflowId];
+                    }
                 }
             }
+        }
+        
+        for (var subflowId in existingFlowConfig.subflows) {
+            if (existingFlowConfig.subflows.hasOwnProperty(subflowId)) {
+                newConfig.subflows[subflowId] = {
+                    id: existingFlowConfig.subflows[subflowId].id,
+                    nodes: {},
+                    configs: {},
+                    instances: existingFlowConfig.subflows[subflowId].instances.slice() // Copy array
+                };
+                // Copy references (shallow)
+                for (var nodeId in existingFlowConfig.subflows[subflowId].nodes) {
+                    if (newConfig.allNodes[nodeId]) {
+                        newConfig.subflows[subflowId].nodes[nodeId] = newConfig.allNodes[nodeId];
+                    }
+                }
+                for (var configId in existingFlowConfig.subflows[subflowId].configs) {
+                    if (newConfig.allNodes[configId]) {
+                        newConfig.subflows[subflowId].configs[configId] = newConfig.allNodes[configId];
+                    }
+                }
+            }
+        }
+        
+        // Track which containers need rebuilding
+        var affectedContainers = new Set();
+        
+        // Find affected containers from changes
+        newNodes.concat(removedNodeIds.map(function(id) {
+            return existingFlowConfig.allNodes[id] || { z: null };
+        })).forEach(function(node) {
+            if (node.z) {
+                affectedContainers.add(node.z);
+            }
         });
-
+        
         // Rebuild only affected containers
-        affectedFlows.forEach(function(flowId) {
-            if (flow.flows[flowId]) {
-                flow.flows[flowId].nodes = {};
-                flow.flows[flowId].configs = {};
-            }
-        });
-
-        affectedSubflows.forEach(function(subflowId) {
-            if (flow.subflows[subflowId]) {
-                flow.subflows[subflowId].nodes = {};
-                flow.subflows[subflowId].configs = {};
-                flow.subflows[subflowId].instances = [];
-            }
-        });
-
-        // Rebuild containers by scanning only nodes in affected flows
-        Object.keys(flow.allNodes).forEach(function(nodeId) {
-            var node = flow.allNodes[nodeId];
-            if (node.z && (affectedFlows.has(node.z) || affectedSubflows.has(node.z))) {
-                var container = flow.flows[node.z] || flow.subflows[node.z];
-                if (container) {
-                    if (node.hasOwnProperty('x') && node.hasOwnProperty('y')) {
-                        container.nodes[nodeId] = node;
-                    } else {
-                        container.configs[nodeId] = node;
+        affectedContainers.forEach(function(containerId) {
+            var container = newConfig.allNodes[containerId];
+            if (!container) return;
+            
+            if (container.type === 'tab' && newConfig.flows[containerId]) {
+                var flowContainer = newConfig.flows[containerId];
+                flowContainer.nodes = {};
+                flowContainer.configs = {};
+                flowContainer.subflows = {};
+                
+                // Rebuild this flow's contents
+                for (var nodeId in newConfig.allNodes) {
+                    var node = newConfig.allNodes[nodeId];
+                    if (node.z === containerId) {
+                        if (node.type === 'subflow') {
+                            flowContainer.subflows[nodeId] = node;
+                        } else if (node.hasOwnProperty('x') && node.hasOwnProperty('y')) {
+                            flowContainer.nodes[nodeId] = node;
+                        } else {
+                            flowContainer.configs[nodeId] = node;
+                        }
+                    }
+                }
+            } else if (container.type === 'subflow' && newConfig.subflows[containerId]) {
+                var subflowContainer = newConfig.subflows[containerId];
+                subflowContainer.nodes = {};
+                subflowContainer.configs = {};
+                
+                // Rebuild this subflow's contents
+                for (var nodeId in newConfig.allNodes) {
+                    var node = newConfig.allNodes[nodeId];
+                    if (node.z === containerId) {
+                        if (node.hasOwnProperty('x') && node.hasOwnProperty('y')) {
+                            subflowContainer.nodes[nodeId] = node;
+                        } else {
+                            subflowContainer.configs[nodeId] = node;
+                        }
                     }
                 }
             }
         });
-
-        return flow;
+        
+        // Regenerate missing types (faster than full re-parse)
+        newConfig.missingTypes = existingFlowConfig.missingTypes.slice(); // Start with existing
+        var subflowInstanceRE = /^subflow:(.+)$/;
+        var typeRegistry = require("../registry");
+        
+        // Only check new nodes for missing types
+        newNodes.forEach(function(node) {
+            if (node.type !== 'tab' && node.type !== 'subflow') {
+                var subflowDetails = subflowInstanceRE.exec(node.type);
+                if ((subflowDetails && !newConfig.subflows[subflowDetails[1]]) || 
+                    (!subflowDetails && !typeRegistry.get(node.type))) {
+                    if (newConfig.missingTypes.indexOf(node.type) === -1) {
+                        newConfig.missingTypes.push(node.type);
+                    }
+                }
+            }
+        });
+        
+        return newConfig;
     },
 
     diffConfigs: function(oldConfig, newConfig) {

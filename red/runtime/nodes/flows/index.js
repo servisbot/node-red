@@ -131,10 +131,9 @@ function setFlows(_config,type,muteLog,forceStart) {
     } else {
         config = clone(_config);
         
-        // Try incremental parsing if we have an existing config
-        if (activeFlowConfig && config.length > 1000) { // Only use incremental for large configs
-            
-            // Calculate what's actually new/changed/removed
+        // Smart incremental parsing for large configs
+        if (activeFlowConfig && config.length > 1000) {
+            // Calculate what's actually changed
             var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
             var newIds = new Set(config.map(function(n) { return n.id; }));
             
@@ -142,20 +141,19 @@ function setFlows(_config,type,muteLog,forceStart) {
             var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
             var totalChanges = addedNodes.length + removedIds.length;
             
-            // Only use incremental if changes are minimal AND not too many small changes
-            if (totalChanges < config.length * 0.1 && totalChanges < 500) { // Less than 10% change AND less than 500 nodes
+            // Use incremental parsing for small changes (avoids expensive clone() of unchanged nodes)
+            if (totalChanges < config.length * 0.1 && totalChanges < 500) {
                 newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, addedNodes, removedIds);
             } else {
+                // For large changes, full parsing is more efficient
                 newFlowConfig = flowUtil.parseConfig(clone(config));
             }
-            
-            // Calculate proper diff with new config
-            diff = flowUtil.diffConfigs(activeFlowConfig, newFlowConfig);
         } else {
             // Use full parsing for small configs or first run
             newFlowConfig = flowUtil.parseConfig(clone(config));
-            diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
         }
+        
+        diff = flowUtil.diffConfigs(activeFlowConfig, newFlowConfig);
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
         // so they don't cause false-positive diffs the next time a flow is deployed
