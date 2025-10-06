@@ -139,11 +139,21 @@ function setFlows(_config,type,muteLog,forceStart) {
             
             var addedNodes = config.filter(function(n) { return !existingIds.has(n.id); });
             var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
-            var totalChanges = addedNodes.length + removedIds.length;
+            
+            // Detect modified nodes (same ID, different content)
+            var changedNodes = config.filter(function(newNode) {
+                if (!existingIds.has(newNode.id)) return false; // Skip new nodes
+                var existingNode = activeFlowConfig.allNodes[newNode.id];
+                return !flowUtil.compareNodes(existingNode, newNode);
+            });
+            
+            var totalChanges = addedNodes.length + removedIds.length + changedNodes.length;
             
             // Use incremental parsing for small changes (avoids expensive clone() of unchanged nodes)
             if (totalChanges < config.length * 0.1 && totalChanges < 500) {
-                newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, addedNodes, removedIds);
+                // Pass all types of changes to incremental parser
+                var allChangedNodes = addedNodes.concat(changedNodes);
+                newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, allChangedNodes, removedIds);
             } else {
                 // For large changes, full parsing is more efficient
                 newFlowConfig = flowUtil.parseConfig(clone(config));

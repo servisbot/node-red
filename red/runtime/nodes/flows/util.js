@@ -65,6 +65,9 @@ function mapEnvVarProperties(obj,prop) {
 module.exports = {
 
     diffNodes: diffNodes,
+    compareNodes: function(oldNode, newNode) {
+        return !diffNodes(oldNode, newNode);
+    },
     mapEnvVarProperties: mapEnvVarProperties,
 
     parseConfig: function(config) {
