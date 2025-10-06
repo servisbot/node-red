@@ -124,10 +124,7 @@ function setFlows(_config,type,muteLog,forceStart) {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
             config = clone(_config.flows);
-            console.log(`[PERF] Full parse required for load - ${config.length} nodes`);
-            var parseStart = Date.now();
             newFlowConfig = flowUtil.parseConfig(clone(config));
-            console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
             type = "full";
             return _config.rev;
         });
@@ -136,7 +133,6 @@ function setFlows(_config,type,muteLog,forceStart) {
         
         // Try incremental parsing if we have an existing config
         if (activeFlowConfig && config.length > 1000) { // Only use incremental for large configs
-            console.log(`[PERF] Attempting incremental parse for ${config.length} nodes`);
             
             // Calculate what's actually new/changed/removed
             var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
@@ -146,31 +142,18 @@ function setFlows(_config,type,muteLog,forceStart) {
             var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
             var totalChanges = addedNodes.length + removedIds.length;
             
-            console.log(`[PERF] Diff analysis: ${addedNodes.length} added, ${removedIds.length} removed`);
-            
             // Only use incremental if changes are minimal AND not too many small changes
             if (totalChanges < config.length * 0.1 && totalChanges < 500) { // Less than 10% change AND less than 500 nodes
-                var incrementalStart = Date.now();
                 newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, addedNodes, removedIds);
-                var incrementalTime = Date.now() - incrementalStart;
-                console.log(`[PERF] Incremental parse completed in ${incrementalTime}ms (processing ${totalChanges} changes vs ${config.length} total)`);
             } else {
-                var changePercent = (totalChanges / config.length * 100).toFixed(1);
-                console.log(`[PERF] Too many changes (${changePercent}% or ${totalChanges} nodes), using full parse`);
-                var parseStart = Date.now();
                 newFlowConfig = flowUtil.parseConfig(clone(config));
-                console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
             }
             
             // Calculate proper diff with new config
             diff = flowUtil.diffConfigs(activeFlowConfig, newFlowConfig);
         } else {
             // Use full parsing for small configs or first run
-            var reason = !activeFlowConfig ? "no existing config" : "small config";
-            console.log(`[PERF] Using full parse (${reason}) for ${config.length} nodes`);
-            var parseStart = Date.now();
             newFlowConfig = flowUtil.parseConfig(clone(config));
-            console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
             diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
         }
 
@@ -211,7 +194,7 @@ function setFlows(_config,type,muteLog,forceStart) {
                         events.emit("runtime-event",{id:"runtime-deploy",payload:{revision:flowRevision},retain: true});
                     });
                     return flowRevision;
-                }).catch(function(err) {
+                }).catch(function(_err) {
                 })
             } else {
                 events.emit("runtime-event",{id:"runtime-deploy",payload:{revision:flowRevision},retain: true});
@@ -322,7 +305,6 @@ function start(type,diff,muteLog) {
         }
         
         if (allTypesKnown) {
-            console.log(`[PERF] Skipping verbose missing types check - ${activeFlowConfig.missingTypes.length} types already cached`);
             events.emit("runtime-event",{id:"runtime-state",payload:{error:"missing-types", type:"warning",text:"notification.warnings.missing-types",types:activeFlowConfig.missingTypes},retain:true});
             return when.resolve();
         }
@@ -466,7 +448,7 @@ function stop(type,diff,muteLog) {
         }
     }
 
-    return when.promise(function(resolve,reject) {
+    return when.promise(function(resolve) {
         when.settle(promises).then(function() {
             for (id in activeNodesToFlow) {
                 if (activeNodesToFlow.hasOwnProperty(id)) {
@@ -519,25 +501,6 @@ function checkTypeInUse(id) {
             var err = new Error(log._("nodes.index.type-in-use", {msg:msg}));
             err.code = "type_in_use";
             throw err;
-        }
-    }
-}
-
-function updateMissingTypes() {
-    var subflowInstanceRE = /^subflow:(.+)$/;
-    activeFlowConfig.missingTypes = [];
-
-    for (var id in activeFlowConfig.allNodes) {
-        if (activeFlowConfig.allNodes.hasOwnProperty(id)) {
-            var node = activeFlowConfig.allNodes[id];
-            if (node.type !== 'tab' && node.type !== 'subflow') {
-                var subflowDetails = subflowInstanceRE.exec(node.type);
-                if ( (subflowDetails && !activeFlowConfig.subflows[subflowDetails[1]]) || (!subflowDetails && !typeRegistry.get(node.type)) ) {
-                    if (activeFlowConfig.missingTypes.indexOf(node.type) === -1) {
-                        activeFlowConfig.missingTypes.push(node.type);
-                    }
-                }
-            }
         }
     }
 }

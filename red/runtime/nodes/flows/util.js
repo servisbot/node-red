@@ -185,9 +185,6 @@ module.exports = {
 
     // New function: Parse only new/changed nodes and merge with existing config
     parseConfigIncremental: function(existingFlowConfig, newNodes, removedNodeIds) {
-        console.log(`[PERF] Incremental parse: ${newNodes.length} new nodes, ${removedNodeIds.length} removed nodes`);
-        var startTime = Date.now();
-        
         // Start with existing config (shallow copy for main structure)
         var flow = {
             allNodes: Object.assign({}, existingFlowConfig.allNodes),
@@ -255,7 +252,6 @@ module.exports = {
             }
         });
 
-        console.log(`[PERF] Incremental parse completed in ${Date.now() - startTime}ms`);
         return flow;
     },
 
