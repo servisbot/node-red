@@ -43,6 +43,8 @@ var activeNodesToFlow = {};
 var subflowInstanceNodeMap = {};
 
 var typeEventRegistered = false;
+var missingTypesCache = new Set(); // Simple cache of missing types
+var lastMissingTypesCheck = 0;
 
 function init(runtime) {
     if (started) {
@@ -53,6 +55,9 @@ function init(runtime) {
     started = false;
     if (!typeEventRegistered) {
         events.on('type-registered',function(type) {
+            // Clear from missing types cache
+            missingTypesCache.delete(type);
+            
             if (activeFlowConfig && activeFlowConfig.missingTypes.length > 0) {
                 var i = activeFlowConfig.missingTypes.indexOf(type);
                 if (i != -1) {
@@ -119,14 +124,55 @@ function setFlows(_config,type,muteLog,forceStart) {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
             config = clone(_config.flows);
+            console.log(`[PERF] Full parse required for load - ${config.length} nodes`);
+            var parseStart = Date.now();
             newFlowConfig = flowUtil.parseConfig(clone(config));
+            console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
             type = "full";
             return _config.rev;
         });
     } else {
         config = clone(_config);
-        newFlowConfig = flowUtil.parseConfig(clone(config));
-        diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
+        
+        // Try incremental parsing if we have an existing config
+        if (activeFlowConfig && config.length > 1000) { // Only use incremental for large configs
+            console.log(`[PERF] Attempting incremental parse for ${config.length} nodes`);
+            
+            // Calculate what's actually new/changed/removed
+            var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
+            var newIds = new Set(config.map(function(n) { return n.id; }));
+            
+            var addedNodes = config.filter(function(n) { return !existingIds.has(n.id); });
+            var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
+            var totalChanges = addedNodes.length + removedIds.length;
+            
+            console.log(`[PERF] Diff analysis: ${addedNodes.length} added, ${removedIds.length} removed`);
+            
+            // Only use incremental if changes are minimal AND not too many small changes
+            if (totalChanges < config.length * 0.1 && totalChanges < 500) { // Less than 10% change AND less than 500 nodes
+                var incrementalStart = Date.now();
+                newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, addedNodes, removedIds);
+                var incrementalTime = Date.now() - incrementalStart;
+                console.log(`[PERF] Incremental parse completed in ${incrementalTime}ms (processing ${totalChanges} changes vs ${config.length} total)`);
+            } else {
+                var changePercent = (totalChanges / config.length * 100).toFixed(1);
+                console.log(`[PERF] Too many changes (${changePercent}% or ${totalChanges} nodes), using full parse`);
+                var parseStart = Date.now();
+                newFlowConfig = flowUtil.parseConfig(clone(config));
+                console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
+            }
+            
+            // Calculate proper diff with new config
+            diff = flowUtil.diffConfigs(activeFlowConfig, newFlowConfig);
+        } else {
+            // Use full parsing for small configs or first run
+            var reason = !activeFlowConfig ? "no existing config" : "small config";
+            console.log(`[PERF] Using full parse (${reason}) for ${config.length} nodes`);
+            var parseStart = Date.now();
+            newFlowConfig = flowUtil.parseConfig(clone(config));
+            console.log(`[PERF] Full parse took ${Date.now() - parseStart}ms`);
+            diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
+        }
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
         // so they don't cause false-positive diffs the next time a flow is deployed
@@ -260,10 +306,34 @@ function start(type,diff,muteLog) {
     started = true;
     var i;
     if (activeFlowConfig.missingTypes.length > 0) {
+        // Check if all missing types are already known (cached within last 60 seconds)
+        var now = Date.now();
+        var allTypesKnown = true;
+        
+        if (now - lastMissingTypesCheck > 60000) { // 60 second cache
+            allTypesKnown = false;
+        } else {
+            for (i = 0; i < activeFlowConfig.missingTypes.length; i++) {
+                if (!missingTypesCache.has(activeFlowConfig.missingTypes[i])) {
+                    allTypesKnown = false;
+                    break;
+                }
+            }
+        }
+        
+        if (allTypesKnown) {
+            console.log(`[PERF] Skipping verbose missing types check - ${activeFlowConfig.missingTypes.length} types already cached`);
+            events.emit("runtime-event",{id:"runtime-state",payload:{error:"missing-types", type:"warning",text:"notification.warnings.missing-types",types:activeFlowConfig.missingTypes},retain:true});
+            return when.resolve();
+        }
+        
+        // Show verbose output and update cache
         log.info(log._("nodes.flows.missing-types"));
         var knownUnknowns = 0;
         for (i=0;i<activeFlowConfig.missingTypes.length;i++) {
             var nodeType = activeFlowConfig.missingTypes[i];
+            missingTypesCache.add(nodeType); // Add to cache
+            
             var info = deprecated.get(nodeType);
             if (info) {
                 log.info(log._("nodes.flows.missing-type-provided",{type:activeFlowConfig.missingTypes[i],module:info.module}));
@@ -272,6 +342,8 @@ function start(type,diff,muteLog) {
                 log.info(" - "+activeFlowConfig.missingTypes[i]);
             }
         }
+        lastMissingTypesCheck = now;
+        
         if (knownUnknowns > 0) {
             log.info(log._("nodes.flows.missing-type-install-1"));
             log.info("  npm install <module name>");

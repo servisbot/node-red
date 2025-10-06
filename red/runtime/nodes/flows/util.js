@@ -114,7 +114,10 @@ module.exports = {
                     if (subflowDetails) {
                         var subflowType = subflowDetails[1]
                         n.subflow = subflowType;
-                        flow.subflows[subflowType].instances.push(n)
+                        // Ensure the subflow exists before trying to access its instances
+                        if (flow.subflows[subflowType] && flow.subflows[subflowType].instances) {
+                            flow.subflows[subflowType].instances.push(n)
+                        }
                     }
                     if (container) {
                         container.nodes[n.id] = n;
@@ -177,6 +180,82 @@ module.exports = {
                 }
             }
         });
+        return flow;
+    },
+
+    // New function: Parse only new/changed nodes and merge with existing config
+    parseConfigIncremental: function(existingFlowConfig, newNodes, removedNodeIds) {
+        console.log(`[PERF] Incremental parse: ${newNodes.length} new nodes, ${removedNodeIds.length} removed nodes`);
+        var startTime = Date.now();
+        
+        // Start with existing config (shallow copy for main structure)
+        var flow = {
+            allNodes: Object.assign({}, existingFlowConfig.allNodes),
+            subflows: Object.assign({}, existingFlowConfig.subflows),
+            configs: Object.assign({}, existingFlowConfig.configs),
+            flows: Object.assign({}, existingFlowConfig.flows),
+            missingTypes: existingFlowConfig.missingTypes.slice() // Copy array
+        };
+
+        // Quick removal - just delete from allNodes and let the add phase rebuild containers
+        removedNodeIds.forEach(function(nodeId) {
+            delete flow.allNodes[nodeId];
+        });
+
+        // Quick addition - just add to allNodes and let existing parseConfig handle the rest
+        newNodes.forEach(function(node) {
+            flow.allNodes[node.id] = clone(node);
+        });
+
+        // Rebuild the container structures efficiently by only processing changed areas
+        var affectedFlows = new Set();
+        var affectedSubflows = new Set();
+        
+        // Find which flows/subflows were affected
+        newNodes.concat(removedNodeIds.map(function(id) { 
+            return existingFlowConfig.allNodes[id] || { z: null }; 
+        })).forEach(function(node) {
+            if (node.z) {
+                if (flow.flows[node.z]) {
+                    affectedFlows.add(node.z);
+                } else if (flow.subflows[node.z]) {
+                    affectedSubflows.add(node.z);
+                }
+            }
+        });
+
+        // Rebuild only affected containers
+        affectedFlows.forEach(function(flowId) {
+            if (flow.flows[flowId]) {
+                flow.flows[flowId].nodes = {};
+                flow.flows[flowId].configs = {};
+            }
+        });
+
+        affectedSubflows.forEach(function(subflowId) {
+            if (flow.subflows[subflowId]) {
+                flow.subflows[subflowId].nodes = {};
+                flow.subflows[subflowId].configs = {};
+                flow.subflows[subflowId].instances = [];
+            }
+        });
+
+        // Rebuild containers by scanning only nodes in affected flows
+        Object.keys(flow.allNodes).forEach(function(nodeId) {
+            var node = flow.allNodes[nodeId];
+            if (node.z && (affectedFlows.has(node.z) || affectedSubflows.has(node.z))) {
+                var container = flow.flows[node.z] || flow.subflows[node.z];
+                if (container) {
+                    if (node.hasOwnProperty('x') && node.hasOwnProperty('y')) {
+                        container.nodes[nodeId] = node;
+                    } else {
+                        container.configs[nodeId] = node;
+                    }
+                }
+            }
+        });
+
+        console.log(`[PERF] Incremental parse completed in ${Date.now() - startTime}ms`);
         return flow;
     },
 
