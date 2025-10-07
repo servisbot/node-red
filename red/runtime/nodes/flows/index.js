@@ -124,31 +124,32 @@ function setFlows(_config,type,muteLog,forceStart) {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
             config = clone(_config.flows);
-            newFlowConfig = flowUtil.parseConfig(clone(config));
+            // parseConfig no longer clones internally, so config is already cloned once above
+            newFlowConfig = flowUtil.parseConfig(config);
             type = "full";
             return _config.rev;
         });
     } else {
         config = clone(_config);
-        
+
         // Smart incremental parsing for large configs
         if (activeFlowConfig && config.length > 1000) {
             // Calculate what's actually changed
             var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
             var newIds = new Set(config.map(function(n) { return n.id; }));
-            
+
             var addedNodes = config.filter(function(n) { return !existingIds.has(n.id); });
             var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
-            
+
             // Detect modified nodes (same ID, different content)
             var changedNodes = config.filter(function(newNode) {
                 if (!existingIds.has(newNode.id)) return false; // Skip new nodes
                 var existingNode = activeFlowConfig.allNodes[newNode.id];
                 return !flowUtil.compareNodes(existingNode, newNode);
             });
-            
+
             var totalChanges = addedNodes.length + removedIds.length + changedNodes.length;
-            
+
             // Use incremental parsing for small changes (avoids expensive clone() of unchanged nodes)
             if (totalChanges < config.length * 0.1 && totalChanges < 500) {
                 // Pass all types of changes to incremental parser
@@ -156,11 +157,13 @@ function setFlows(_config,type,muteLog,forceStart) {
                 newFlowConfig = flowUtil.parseConfigIncremental(activeFlowConfig, allChangedNodes, removedIds);
             } else {
                 // For large changes, full parsing is more efficient
-                newFlowConfig = flowUtil.parseConfig(clone(config));
+                // parseConfig no longer clones internally, so config is already cloned once above
+                newFlowConfig = flowUtil.parseConfig(config);
             }
         } else {
             // Use full parsing for small configs or first run
-            newFlowConfig = flowUtil.parseConfig(clone(config));
+            // parseConfig no longer clones internally, so config is already cloned once above
+            newFlowConfig = flowUtil.parseConfig(config);
         }
         
         diff = flowUtil.diffConfigs(activeFlowConfig, newFlowConfig);
