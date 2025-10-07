@@ -227,7 +227,7 @@ module.exports = {
         // Second pass: Distribute nodes to their respective flow shards
         var linkWires = {};
         var linkOutNodes = {};
-        var missingTypeSet = {};
+        var globalMissingTypeSet = {};
 
         for (i = 0; i < config.length; i++) {
             n = config[i];
@@ -241,24 +241,52 @@ module.exports = {
 
             // Determine target shard
             var targetShard = null;
+            var shardMissingTypeSet = null;
             if (flowId && shardedConfig._flows[flowId]) {
                 targetShard = shardedConfig._flows[flowId];
+                // Initialize per-shard missing type set if not exists
+                if (!targetShard._missingTypeSet) {
+                    targetShard._missingTypeSet = {};
+                }
+                shardMissingTypeSet = targetShard._missingTypeSet;
             } else if (flowId && shardedConfig._global.subflows[flowId]) {
                 // Node belongs to a subflow - add to global
                 targetShard = shardedConfig._global;
+                shardMissingTypeSet = globalMissingTypeSet;
+            } else if (flowId && !shardedConfig._flows[flowId] && !shardedConfig._global.subflows[flowId]) {
+                // Node references unknown flow ID - create placeholder tab (legacy behavior)
+                shardedConfig._flows[flowId] = {
+                    allNodes: {},
+                    flows: {},
+                    configs: {},
+                    subflows: {},
+                    missingTypes: []
+                };
+                // Create placeholder tab
+                var placeholderTab = {type: 'tab', id: flowId};
+                shardedConfig._flows[flowId].flows[flowId] = placeholderTab;
+                shardedConfig._flows[flowId].flows[flowId].nodes = {};
+                shardedConfig._flows[flowId].flows[flowId].configs = {};
+                shardedConfig._flows[flowId].flows[flowId].subflows = {};
+                shardedConfig._flows[flowId].allNodes[flowId] = shardedConfig._flows[flowId].flows[flowId];
+                
+                targetShard = shardedConfig._flows[flowId];
+                targetShard._missingTypeSet = {};
+                shardMissingTypeSet = targetShard._missingTypeSet;
             }
 
             if (!targetShard && !flowId) {
                 // Global config node
                 targetShard = shardedConfig._global;
+                shardMissingTypeSet = globalMissingTypeSet;
             }
 
-            if (targetShard) {
+            if (targetShard && shardMissingTypeSet !== null) {
                 targetShard.allNodes[n.id] = clonedNode;
 
-                // Check for missing types
+                // Check for missing types using shard-specific set
                 var subflowDetails = subflowInstanceRE.exec(n.type);
-                if (!missingTypeSet[n.type]) {
+                if (!shardMissingTypeSet[n.type]) {
                     var isMissing = false;
 
                     if (subflowDetails) {
@@ -291,7 +319,7 @@ module.exports = {
                             // Global config node or node in subflow
                             shardedConfig._global.missingTypes.push(n.type);
                         }
-                        missingTypeSet[n.type] = true;
+                        shardMissingTypeSet[n.type] = true;
                     }
                 }
 
@@ -382,6 +410,13 @@ module.exports = {
                         }
                     }
                 }
+            }
+        }
+
+        // Clean up temporary missing type sets
+        for (flowId in shardedConfig._flows) {
+            if (shardedConfig._flows.hasOwnProperty(flowId)) {
+                delete shardedConfig._flows[flowId]._missingTypeSet;
             }
         }
 
