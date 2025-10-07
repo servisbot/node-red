@@ -129,8 +129,7 @@ function setFlows(_config,type,muteLog,forceStart) {
     } else {
         config = clone(_config);
 
-        // Use sharding for large configs
-        if (activeShardedConfig && config.length > 1000) {
+        if (activeShardedConfig && process.env.ENABLE_FLOW_SHARDS === 'true') {
             var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
             var newIds = new Set(config.map(function(n) { return n.id; }));
 
