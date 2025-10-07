@@ -450,6 +450,8 @@ module.exports = {
             merged.missingTypes = merged.missingTypes.concat(shardedConfig._global.missingTypes);
         }
 
+        merged.missingTypes = Array.from(new Set(merged.missingTypes));
+
         return merged;
     },
 
