@@ -188,7 +188,8 @@ module.exports = {
             _global: {
                 configs: {},
                 subflows: {},
-                allNodes: {}
+                allNodes: {},
+                missingTypes: []  // Track missing types for global/subflow nodes
             },
             _flows: {}
         };
@@ -260,8 +261,13 @@ module.exports = {
                 if (!missingTypeSet[n.type]) {
                     if ((subflowDetails && !shardedConfig._global.subflows[subflowDetails[1]]) ||
                         (!subflowDetails && !typeRegistry.get(n.type))) {
+                        // Add to appropriate shard
                         if (flowId && shardedConfig._flows[flowId]) {
+                            // Node in a flow tab
                             shardedConfig._flows[flowId].missingTypes.push(n.type);
+                        } else {
+                            // Global config node or node in subflow
+                            shardedConfig._global.missingTypes.push(n.type);
                         }
                         missingTypeSet[n.type] = true;
                     }
@@ -423,6 +429,11 @@ module.exports = {
 
                 merged.missingTypes = merged.missingTypes.concat(shard.missingTypes);
             }
+        }
+
+        // Include global missing types (for global configs and subflow nodes)
+        if (shardedConfig._global.missingTypes) {
+            merged.missingTypes = merged.missingTypes.concat(shardedConfig._global.missingTypes);
         }
 
         return merged;
