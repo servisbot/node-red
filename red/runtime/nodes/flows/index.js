@@ -34,6 +34,7 @@ var settings = null;
 
 var activeConfig = null;
 var activeFlowConfig = null;
+var activeShardedConfig = null;  // Flow-based sharding for large deployments
 
 var activeFlows = {};
 var started = false;
@@ -119,13 +120,58 @@ function setFlows(_config,type,muteLog,forceStart) {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
             config = clone(_config.flows);
-            newFlowConfig = flowUtil.parseConfig(clone(config));
+            var shardedConfig = flowUtil.parseConfigByFlow(config);
+            activeShardedConfig = shardedConfig;
+            newFlowConfig = flowUtil.mergeShardedConfig(shardedConfig);
             type = "full";
             return _config.rev;
         });
     } else {
         config = clone(_config);
-        newFlowConfig = flowUtil.parseConfig(clone(config));
+
+        // Use sharding for large configs
+        if (activeShardedConfig && config.length > 1000) {
+            var existingIds = new Set(Object.keys(activeFlowConfig.allNodes));
+            var newIds = new Set(config.map(function(n) { return n.id; }));
+
+            var addedNodes = config.filter(function(n) { return !existingIds.has(n.id); });
+            var removedIds = Array.from(existingIds).filter(function(id) { return !newIds.has(id); });
+            var changedNodes = config.filter(function(newNode) {
+                if (!existingIds.has(newNode.id)) return false;
+                var existingNode = activeFlowConfig.allNodes[newNode.id];
+                return !flowUtil.compareNodes(existingNode, newNode);
+            });
+
+            // Group changes by flow
+            var affectedFlowIds = new Set();
+            addedNodes.concat(changedNodes).forEach(function(node) {
+                if (node.z) affectedFlowIds.add(node.z);
+            });
+            removedIds.forEach(function(id) {
+                var oldNode = activeFlowConfig.allNodes[id];
+                if (oldNode && oldNode.z) affectedFlowIds.add(oldNode.z);
+            });
+
+            // Update only affected flow shards
+            affectedFlowIds.forEach(function(flowId) {
+                var flowChanges = addedNodes.concat(changedNodes).filter(function(n) {
+                    return n.z === flowId;
+                });
+                var flowRemovals = removedIds.filter(function(id) {
+                    var oldNode = activeFlowConfig.allNodes[id];
+                    return oldNode && oldNode.z === flowId;
+                });
+
+                flowUtil.updateFlowShard(activeShardedConfig, flowId, flowChanges, flowRemovals);
+            });
+
+            // Merge back for compatibility
+            newFlowConfig = flowUtil.mergeShardedConfig(activeShardedConfig);
+        } else {
+            // Fall back to traditional parsing for small configs or first run
+            newFlowConfig = flowUtil.parseConfig(clone(config));
+        }
+
         diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
