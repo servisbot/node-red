@@ -259,8 +259,30 @@ module.exports = {
                 // Check for missing types
                 var subflowDetails = subflowInstanceRE.exec(n.type);
                 if (!missingTypeSet[n.type]) {
-                    if ((subflowDetails && !shardedConfig._global.subflows[subflowDetails[1]]) ||
-                        (!subflowDetails && !typeRegistry.get(n.type))) {
+                    var isMissing = false;
+
+                    if (subflowDetails) {
+                        var subflowId = subflowDetails[1];
+                        // Check global subflows first
+                        if (!shardedConfig._global.subflows[subflowId]) {
+                            // Not in global, check if it's a flow-level subflow
+                            var foundInFlow = false;
+                            if (flowId && shardedConfig._flows[flowId] &&
+                                shardedConfig._flows[flowId].flows &&
+                                shardedConfig._flows[flowId].flows[flowId] &&
+                                shardedConfig._flows[flowId].flows[flowId].subflows &&
+                                shardedConfig._flows[flowId].flows[flowId].subflows[subflowId]) {
+                                foundInFlow = true;
+                            }
+                            if (!foundInFlow) {
+                                isMissing = true;
+                            }
+                        }
+                    } else if (!typeRegistry.get(n.type)) {
+                        isMissing = true;
+                    }
+
+                    if (isMissing) {
                         // Add to appropriate shard
                         if (flowId && shardedConfig._flows[flowId]) {
                             // Node in a flow tab
@@ -380,7 +402,7 @@ module.exports = {
         for (nodeId in shardedConfig._global.configs) {
             if (shardedConfig._global.configs.hasOwnProperty(nodeId)) {
                 node = shardedConfig._global.configs[nodeId];
-                merged.configs[nodeId] = Object.assign({}, node);
+                merged.configs[nodeId] = clone(node);
                 merged.allNodes[nodeId] = merged.configs[nodeId];
             }
         }
@@ -388,11 +410,7 @@ module.exports = {
         for (nodeId in shardedConfig._global.subflows) {
             if (shardedConfig._global.subflows.hasOwnProperty(nodeId)) {
                 node = shardedConfig._global.subflows[nodeId];
-                merged.subflows[nodeId] = Object.assign({}, node);
-
-                merged.subflows[nodeId].nodes = node.nodes;
-                merged.subflows[nodeId].configs = node.configs;
-                merged.subflows[nodeId].instances = node.instances;
+                merged.subflows[nodeId] = clone(node);
                 merged.allNodes[nodeId] = merged.subflows[nodeId];
             }
         }
@@ -404,11 +422,7 @@ module.exports = {
                 for (nodeId in shard.flows) {
                     if (shard.flows.hasOwnProperty(nodeId)) {
                         node = shard.flows[nodeId];
-                        merged.flows[nodeId] = Object.assign({}, node);
-
-                        merged.flows[nodeId].nodes = node.nodes;
-                        merged.flows[nodeId].configs = node.configs;
-                        merged.flows[nodeId].subflows = node.subflows;
+                        merged.flows[nodeId] = clone(node);
                         merged.allNodes[nodeId] = merged.flows[nodeId];
                     }
                 }
@@ -416,14 +430,14 @@ module.exports = {
                 for (nodeId in shard.allNodes) {
                     if (shard.allNodes.hasOwnProperty(nodeId) && !merged.allNodes[nodeId]) {
                         node = shard.allNodes[nodeId];
-                        merged.allNodes[nodeId] = Object.assign({}, node);
+                        merged.allNodes[nodeId] = clone(node);
                     }
                 }
 
                 for (nodeId in shard.configs) {
                     if (shard.configs.hasOwnProperty(nodeId)) {
                         node = shard.configs[nodeId];
-                        merged.configs[nodeId] = Object.assign({}, node);
+                        merged.configs[nodeId] = clone(node);
                     }
                 }
 
@@ -472,9 +486,23 @@ module.exports = {
             }
         }
 
+        // Rebuild _users references for both local and global configs
         for (nodeId in shard.configs) {
             if (shard.configs.hasOwnProperty(nodeId)) {
                 shard.configs[nodeId]._users = [];
+            }
+        }
+        
+        // Also rebuild _users for global configs that might be referenced by nodes in this shard
+        for (nodeId in shardedConfig._global.configs) {
+            if (shardedConfig._global.configs.hasOwnProperty(nodeId)) {
+                if (!shardedConfig._global.configs[nodeId]._users) {
+                    shardedConfig._global.configs[nodeId]._users = [];
+                }
+                // Reset users from this shard only - filter out nodes from this flowId
+                shardedConfig._global.configs[nodeId]._users = shardedConfig._global.configs[nodeId]._users.filter(function(userId) {
+                    return !shard.allNodes[userId]; // Keep users that are not from this shard
+                });
             }
         }
 
@@ -484,9 +512,57 @@ module.exports = {
                 if (node.type !== 'tab') {
                     for (var prop in node) {
                         if (node.hasOwnProperty(prop) && prop !== 'id' && prop !== 'wires' &&
-                            prop !== 'type' && prop !== '_users' && shard.configs[node[prop]]) {
-                            shard.configs[node[prop]]._users.push(node.id);
+                            prop !== 'type' && prop !== '_users') {
+                            // Check local configs first
+                            if (shard.configs[node[prop]]) {
+                                shard.configs[node[prop]]._users.push(node.id);
+                            }
+                            // Check global configs
+                            else if (shardedConfig._global.configs[node[prop]]) {
+                                if (!shardedConfig._global.configs[node[prop]]._users) {
+                                    shardedConfig._global.configs[node[prop]]._users = [];
+                                }
+                                shardedConfig._global.configs[node[prop]]._users.push(node.id);
+                            }
                         }
+                    }
+                }
+            }
+        }
+
+        // Recalculate missingTypes for this shard
+        shard.missingTypes = [];
+        var missingTypeSet = {};
+        
+        for (nodeId in shard.allNodes) {
+            if (shard.allNodes.hasOwnProperty(nodeId)) {
+                node = shard.allNodes[nodeId];
+                if (node.type !== 'tab' && node.type !== 'subflow' && !missingTypeSet[node.type]) {
+                    var subflowDetails = subflowInstanceRE.exec(node.type);
+                    var isMissing = false;
+
+                    if (subflowDetails) {
+                        var subflowId = subflowDetails[1];
+                        // Check global subflows first
+                        if (!shardedConfig._global.subflows[subflowId]) {
+                            // Not in global, check if it's a flow-level subflow
+                            var foundInFlow = false;
+                            if (shard.flows[flowId] &&
+                                shard.flows[flowId].subflows &&
+                                shard.flows[flowId].subflows[subflowId]) {
+                                foundInFlow = true;
+                            }
+                            if (!foundInFlow) {
+                                isMissing = true;
+                            }
+                        }
+                    } else if (!typeRegistry.get(node.type)) {
+                        isMissing = true;
+                    }
+
+                    if (isMissing) {
+                        shard.missingTypes.push(node.type);
+                        missingTypeSet[node.type] = true;
                     }
                 }
             }
