@@ -119,8 +119,6 @@ function setFlows(_config,type,muteLog,forceStart) {
         configSavePromise = loadFlows().then(function(_config) {
             config = redUtil.clone(_config.flows);
             newFlowConfig = flowUtil.parseConfig(redUtil.clone(config));
-            // write config to file to debug
-            require("fs").writeFileSync("/tmp/flows-2.json",JSON.stringify(config,null,4));
             type = "full";
             return _config.rev;
         });
@@ -128,7 +126,6 @@ function setFlows(_config,type,muteLog,forceStart) {
         config = redUtil.clone(_config);
         newFlowConfig = flowUtil.parseConfig(redUtil.clone(config));
         diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
-        require("fs").writeFileSync("/tmp/flows-2.json",JSON.stringify(config,null,4));
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
         // so they don't cause false-positive diffs the next time a flow is deployed
