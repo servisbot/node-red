@@ -18,7 +18,7 @@ var express = require("express");
 var util = require("util");
 var path = require("path");
 var fs = require("fs");
-var clone = require("clone");
+var redUtil = require("../../runtime/util");
 
 var defaultContext = {
     page: {
@@ -38,7 +38,7 @@ var defaultContext = {
 };
 
 var theme = null;
-var themeContext = clone(defaultContext);
+var themeContext = redUtil.clone(defaultContext);
 var themeSettings = null;
 var runtime = null;
 
@@ -80,7 +80,7 @@ function serveFilesFromTheme(themeValue, themeApp, directory) {
 module.exports = {
     init: function(runtime) {
         var settings = runtime.settings;
-        themeContext = clone(defaultContext);
+        themeContext = redUtil.clone(defaultContext);
         if (runtime.version) {
             themeContext.version = runtime.version();
         }

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-var clone = require("clone");
 var redUtil = require("../../util");
 var subflowInstanceRE = /^subflow:(.+)$/;
 var typeRegistry = require("../registry");
@@ -76,7 +75,7 @@ module.exports = {
         flow.missingTypes = [];
 
         config.forEach(function(n) {
-            flow.allNodes[n.id] = clone(n);
+            flow.allNodes[n.id] = redUtil.clone(n);
             if (n.type === 'tab') {
                 flow.flows[n.id] = n;
                 flow.flows[n.id].subflows = {};

@@ -15,7 +15,6 @@
  **/
 
 var when = require("when");
-var clone = require("clone");
 var assert = require("assert");
 var log = require("./log");
 var util = require("./util");
@@ -68,12 +67,12 @@ var persistentSettings = {
             throw new Error("Do not access user settings directly. Use settings.getUserSettings");
         }
         if (localSettings.hasOwnProperty(prop)) {
-            return clone(localSettings[prop]);
+            return util.clone(localSettings[prop]);
         }
         if (globalSettings === null) {
             throw new Error(log._("settings.not-available"));
         }
-        return clone(globalSettings[prop]);
+        return util.clone(globalSettings[prop]);
     },
 
     set: function(prop,value) {
@@ -170,7 +169,7 @@ var persistentSettings = {
         });
     },
     getUserSettings: function(username) {
-        return clone(userSettings[username]);
+        return util.clone(userSettings[username]);
     },
     setUserSettings: function(username,settings) {
         if (globalSettings === null) {

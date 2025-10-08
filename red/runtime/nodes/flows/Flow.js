@@ -15,7 +15,6 @@
  **/
 
 var when = require("when");
-var clone = require("clone");
 var typeRegistry = require("../registry");
 var Log = require("../../log");
 var redUtil = require("../../util");
@@ -294,7 +293,7 @@ function createNode(type,config) {
     var nn = null;
     var nt = typeRegistry.get(type);
     if (nt) {
-        var conf = clone(config);
+        var conf = redUtil.clone(config);
         delete conf.credentials;
         for (var p in conf) {
             if (conf.hasOwnProperty(p)) {
@@ -328,7 +327,7 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
     var i,j,k;
 
     var createNodeInSubflow = function(def) {
-        node = clone(def);
+        node = redUtil.clone(def);
         node_map[node.id] = node;
         node._alias = node.id;
         // Stop generating new node ids for nodes inside subflows
@@ -391,7 +390,7 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
     }
     if (sf.in) {
         subflowInstance.wires = sf.in.map(function(n) { return n.wires.map(function(w) { return node_map[w.id].id;})})
-        subflowInstance._originalWires = clone(subflowInstance.wires);
+        subflowInstance._originalWires = redUtil.clone(subflowInstance.wires);
     }
     var subflowNode = new Node(subflowInstance);
 
@@ -405,14 +404,14 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
         if (sf.out) {
             var node,wires,i,j;
             // Restore the original wiring to the internal nodes
-            subflowInstance.wires = clone(subflowInstance._originalWires);
+            subflowInstance.wires = redUtil.clone(subflowInstance._originalWires);
             for (i=0;i<sf.out.length;i++) {
                 wires = sf.out[i].wires;
                 for (j=0;j<wires.length;j++) {
                     if (wires[j].id != sf.id) {
                         node = node_map[wires[j].id];
                         if (node._originalWires) {
-                            node.wires = clone(node._originalWires);
+                            node.wires = redUtil.clone(node._originalWires);
                         }
                     }
                 }
@@ -460,7 +459,7 @@ function createSubflow(sf,sfn,subflows,globalSubflows,activeNodes) {
                     node = node_map[wires[j].id];
                     modifiedNodes[node.id] = node;
                     if (!node._originalWires) {
-                        node._originalWires = clone(node.wires);
+                        node._originalWires = redUtil.clone(node.wires);
                     }
                     node.wires[wires[j].port] = (node.wires[wires[j].port]||[]).concat(sfn.wires[i]);
                 }

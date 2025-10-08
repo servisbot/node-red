@@ -17,7 +17,7 @@
 var when = require("when");
 var path = require("path");
 var fs = require("fs");
-var clone = require("clone");
+var redUtil = require("../util");
 
 var registry = require("./registry");
 var credentials = require("./credentials");
@@ -78,7 +78,7 @@ function createNode(node,def) {
     }
     var creds = credentials.get(id);
     if (creds) {
-        creds = clone(creds);
+        creds = redUtil.clone(creds);
         //console.log("Attaching credentials to ",node.id);
         // allow $(foo) syntax to substitute env variables for credentials also...
         for (var p in creds) {

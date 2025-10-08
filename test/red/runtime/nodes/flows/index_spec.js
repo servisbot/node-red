@@ -17,7 +17,6 @@
 var should = require("should");
 var sinon = require("sinon");
 var when = require("when");
-var clone = require("clone");
 var flows = require("../../../../../red/runtime/nodes/flows");
 var RedNode = require("../../../../../red/runtime/nodes/Node");
 var RED = require("../../../../../red/runtime/nodes");
@@ -25,6 +24,7 @@ var events = require("../../../../../red/runtime/events");
 var credentials = require("../../../../../red/runtime/nodes/credentials");
 var typeRegistry = require("../../../../../red/runtime/nodes/registry");
 var Flow = require("../../../../../red/runtime/nodes/flows/Flow");
+var redUtil = require("../../../../../red/runtime/util");
 
 describe('flows/index', function() {
 
@@ -169,7 +169,7 @@ describe('flows/index', function() {
                 {id:"t1-1",x:10,y:10,z:"t1",type:"test",wires:[]},
                 {id:"t1",type:"tab"}
             ];
-            var newConfig = clone(originalConfig);
+            var newConfig = redUtil.clone(originalConfig);
             newConfig.push({id:"t1-2",x:10,y:10,z:"t1",type:"test",wires:[]});
             newConfig.push({id:"t2",type:"tab"});
             newConfig.push({id:"t2-1",x:10,y:10,z:"t2",type:"test",wires:[]});
@@ -198,7 +198,7 @@ describe('flows/index', function() {
                 {id:"t1-1",x:10,y:10,z:"t1",type:"test",wires:[]},
                 {id:"t1",type:"tab"}
             ];
-            var newConfig = clone(originalConfig);
+            var newConfig = redUtil.clone(originalConfig);
             newConfig.push({id:"t1-2",x:10,y:10,z:"t1",type:"test",wires:[]});
             newConfig.push({id:"t2",type:"tab"});
             newConfig.push({id:"t2-1",x:10,y:10,z:"t2",type:"test",wires:[]});

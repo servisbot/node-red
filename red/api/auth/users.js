@@ -15,7 +15,7 @@
 **/
 
 var util = require("util");
-var clone = require("clone");
+var redUtil = require("../../runtime/util");
 var bcrypt;
 try { bcrypt = require('bcrypt'); }
 catch(e) { bcrypt = require('bcryptjs'); }
@@ -77,7 +77,7 @@ function init(config) {
                 }
                 for (var i=0;i<us.length;i++) {
                     var u = us[i];
-                    users[u.username] = clone(u);
+                    users[u.username] = redUtil.clone(u);
                 }
             }
         }
@@ -108,7 +108,7 @@ function init(config) {
 }
 function cleanUser(user) {
     if (user && user.hasOwnProperty('password')) {
-        user = clone(user);
+        user = redUtil.clone(user);
         delete user.password;
     }
     return user;

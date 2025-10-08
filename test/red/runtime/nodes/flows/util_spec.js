@@ -17,7 +17,6 @@
 var should = require("should");
 var sinon = require("sinon");
 var when = require("when");
-var clone = require("clone");
 var flowUtil = require("../../../../../red/runtime/nodes/flows/util");
 var typeRegistry = require("../../../../../red/runtime/nodes/registry");
 var redUtil = require("../../../../../red/runtime/util");
@@ -169,8 +168,8 @@ describe('flows/util', function() {
         it('handles an identical configuration', function() {
             var config = [{id:"123",type:"test",foo:"a",wires:[]}];
 
-            var originalConfig = flowUtil.parseConfig(clone(config));
-            var changedConfig = flowUtil.parseConfig(clone(config));
+            var originalConfig = flowUtil.parseConfig(redUtil.clone(config));
+            var changedConfig = flowUtil.parseConfig(redUtil.clone(config));
 
             originalConfig.missingTypes.should.have.length(0);
 
@@ -185,7 +184,7 @@ describe('flows/util', function() {
 
         it('identifies nodes with changed properties, including downstream linked', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[]},{id:"2",type:"test",bar:"b",wires:[[1]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[0].foo = "b";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -203,7 +202,7 @@ describe('flows/util', function() {
         });
         it('identifies nodes with changed properties, including upstream linked', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[]},{id:"2",type:"test",bar:"b",wires:[["1"]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[1].bar = "c";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -221,7 +220,7 @@ describe('flows/util', function() {
 
         it('identifies nodes with changed credentials, including downstream linked', function() {
             var config = [{id:"1",type:"test",wires:[]},{id:"2",type:"test",bar:"b",wires:[["1"]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[0].credentials = {};
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -239,7 +238,7 @@ describe('flows/util', function() {
 
         it('identifies nodes with changed wiring', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[]},{id:"2",type:"test",bar:"b",wires:[["1"]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[1].wires[0][0] = "3";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -257,7 +256,7 @@ describe('flows/util', function() {
 
         it('identifies nodes with changed wiring - second connection added', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[]},{id:"2",type:"test",bar:"b",wires:[["1"]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[1].wires[0].push("1");
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -275,7 +274,7 @@ describe('flows/util', function() {
 
         it('identifies nodes with changed wiring - node connected', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[["2"]]},{id:"2",type:"test",bar:"b",wires:[[]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[1].wires.push("3");
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -293,7 +292,7 @@ describe('flows/util', function() {
 
         it('identifies new nodes', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig.push({id:"2",type:"test",bar:"b",wires:[["1"]]});
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -311,7 +310,7 @@ describe('flows/util', function() {
 
         it('identifies deleted nodes', function() {
             var config = [{id:"1",type:"test",foo:"a",wires:[["2"]]},{id:"2",type:"test",bar:"b",wires:[["3"]]},{id:"3",type:"test",foo:"a",wires:[]}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig.splice(1,1);
             newConfig[0].wires = [];
 
@@ -335,7 +334,7 @@ describe('flows/util', function() {
                 {id:"3",type:"test",foo:"a",wires:[]},
                 {id:"configNode",type:"testConfig"}
             ];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[3].foo = "bar";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -359,7 +358,7 @@ describe('flows/util', function() {
                 {id:"configNode1",foo:"configNode2",type:"testConfig"},
                 {id:"configNode2",type:"testConfig"}
             ];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[4].foo = "bar";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -385,7 +384,7 @@ describe('flows/util', function() {
                 {id:"4",type:"subflow:sf1",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[4].foo = "b";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -413,7 +412,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[4].wires = [["sf1-2"]];
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -439,7 +438,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig.push({id:"sf1-3",z:"sf1",type:"test",wires:[]});
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -466,7 +465,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig.splice(5,1);
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -494,7 +493,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[3].in[0].wires = [];
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -520,7 +519,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[3].in[0].wires.push({"id":"sf1-2"});
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -546,7 +545,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[3].out[0].wires.push({"id":"sf1-2","port":0});
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -572,7 +571,7 @@ describe('flows/util', function() {
                 {id:"sf1-2",z:"sf1",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[3].out[0].wires = [];
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -599,7 +598,7 @@ describe('flows/util', function() {
                 {id:"configNode",a:"foo",type:"test",wires:[]}
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[6].a = "bar";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -628,7 +627,7 @@ describe('flows/util', function() {
                 {id:"sf2-2",z:"sf2",type:"test",wires:[]},
             ];
 
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[8].a = "bar";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -647,7 +646,7 @@ describe('flows/util', function() {
 
         it('ignores tab changes that are immaterial', function() {
             var config = [{id:"1",type:"tab",label:"fred"},{id:"2",type:"test",bar:"b",wires:[["1"]],z:"1"}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[0].label = "barney";
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -666,7 +665,7 @@ describe('flows/util', function() {
         it('marks a deleted tab as removed', function() {
             var config = [{id:"f1",type:"tab",label:"fred"},{id:"n1",type:"test",bar:"b",wires:[["1"]],z:"f1"},
                           {id:"f2",type:"tab",label:"fred"},{id:"n2",type:"test",bar:"b",wires:[["1"]],z:"f2"}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig = newConfig.slice(0,2);
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -683,7 +682,7 @@ describe('flows/util', function() {
 
         it('marks all nodes as added when tab state changes disabled to enabled', function() {
             var config = [{id:"1",type:"tab",disabled:true,label:"fred"},{id:"2",type:"test",bar:"b",wires:[["1"]],z:"1"},{id:"3",type:"test"}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[0].disabled = false;
 
             var originalConfig = flowUtil.parseConfig(config);
@@ -701,7 +700,7 @@ describe('flows/util', function() {
         });
         it('marks all nodes as removed when tab state changes enabled to disabled', function() {
             var config = [{id:"1",type:"tab",disabled:false,label:"fred"},{id:"2",type:"test",bar:"b",wires:[["1"]],z:"1"},{id:"3",type:"test"}];
-            var newConfig = clone(config);
+            var newConfig = redUtil.clone(config);
             newConfig[0].disabled = true;
 
             var originalConfig = flowUtil.parseConfig(config);
