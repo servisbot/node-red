@@ -14,7 +14,6 @@
  * limitations under the License.
  **/
 
-var clone = require("clone");
 var when = require("when");
 
 var Flow = require('./Flow');
@@ -118,14 +117,14 @@ function setFlows(_config,type,muteLog,forceStart) {
     if (type === "load") {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
-            config = clone(_config.flows);
-            newFlowConfig = flowUtil.parseConfig(clone(config));
+            config = redUtil.clone(_config.flows);
+            newFlowConfig = flowUtil.parseConfig(redUtil.clone(config));
             type = "full";
             return _config.rev;
         });
     } else {
-        config = clone(_config);
-        newFlowConfig = flowUtil.parseConfig(clone(config));
+        config = redUtil.clone(_config);
+        newFlowConfig = flowUtil.parseConfig(redUtil.clone(config));
         diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
@@ -509,7 +508,7 @@ function addFlow(flow) {
             nodes.push(node);
         }
     }
-    var newConfig = clone(activeConfig.flows);
+    var newConfig = redUtil.clone(activeConfig.flows);
     newConfig = newConfig.concat(nodes);
 
     return setFlows(newConfig,'flows',true).then(function() {
@@ -541,7 +540,7 @@ function getFlow(id) {
         var nodeIds = Object.keys(flow.nodes);
         if (nodeIds.length > 0) {
             result.nodes = nodeIds.map(function(nodeId) {
-                var node = clone(flow.nodes[nodeId]);
+                var node = redUtil.clone(flow.nodes[nodeId]);
                 if (node.type === 'link out') {
                     delete node.wires;
                 }
@@ -552,7 +551,7 @@ function getFlow(id) {
     if (flow.configs) {
         var configIds = Object.keys(flow.configs);
         result.configs = configIds.map(function(configId) {
-            return clone(flow.configs[configId]);
+            return redUtil.clone(flow.configs[configId]);
         })
         if (result.configs.length === 0) {
             delete result.configs;
@@ -561,7 +560,7 @@ function getFlow(id) {
     if (flow.subflows) {
         var subflowIds = Object.keys(flow.subflows);
         result.subflows = subflowIds.map(function(subflowId) {
-            var subflow = clone(flow.subflows[subflowId]);
+            var subflow = redUtil.clone(flow.subflows[subflowId]);
             var nodeIds = Object.keys(subflow.nodes);
             subflow.nodes = nodeIds.map(function(id) {
                 return subflow.nodes[id];
@@ -592,7 +591,7 @@ function updateFlow(id,newFlow) {
         }
         label = activeFlowConfig.flows[id].label;
     }
-    var newConfig = clone(activeConfig.flows);
+    var newConfig = redUtil.clone(activeConfig.flows);
     var nodes;
 
     if (id === 'global') {
@@ -647,7 +646,7 @@ function removeFlow(id) {
         throw e;
     }
 
-    var newConfig = clone(activeConfig.flows);
+    var newConfig = redUtil.clone(activeConfig.flows);
     newConfig = newConfig.filter(function(node) {
         return node.z !== id && node.id !== id;
     });

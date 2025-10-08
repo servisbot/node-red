@@ -1,4 +1,4 @@
-const clone = require('clone');
+const redUtil = require('../red/runtime/util');
 const _ = require('lodash');
 
 const variablesToCheck = [
@@ -11,7 +11,7 @@ const variablesToCheck = [
 module.exports = class PayloadValidator {
   constructor(_before, id) {
     try {
-      const before = clone(_before);
+      const before = redUtil.clone(_before);
       const {
         logger,
         payload: {

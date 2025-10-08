@@ -14,7 +14,7 @@
  * limitations under the License.
  **/
 
- const clone = require("clone");
+ const redUtil = require("../../../red/runtime/util");
  const PayloadValidator = require("../../PayloadValidator");
  
  /*
@@ -349,7 +349,7 @@
      try {
        this.on("input", async function (msg) {
          try {
-           const originalMessage = clone(msg);
+           const originalMessage = redUtil.clone(msg);
            const payloadValidator = new PayloadValidator(msg, this.id);
            var start = process.hrtime();
            sandbox.msg = msg;
@@ -359,7 +359,7 @@
            const afterVm2 = process.hrtime(beforeVm2);
            payloadValidator.verify(result);
            sendResults(this, msg._msgid, result);
-           const logger = clone(msg.logger);
+           const logger = redUtil.clone(msg.logger);
  
            const {
              settings: {

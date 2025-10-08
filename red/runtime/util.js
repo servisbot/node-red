@@ -17,6 +17,14 @@
 var clone = require("clone");
 var jsonata = require("jsonata");
 
+function cloneDeep(obj) {
+    try {
+        return structuredClone(obj);
+    } catch (e) {
+        return clone(obj);
+    }
+}
+
 function generateId() {
     return (1+Math.random()*4294967295).toString(16);
 }
@@ -379,5 +387,6 @@ module.exports = {
     normalisePropertyExpression: normalisePropertyExpression,
     normaliseNodeTypeName: normaliseNodeTypeName,
     prepareJSONataExpression: prepareJSONataExpression,
-    evaluateJSONataExpression: evaluateJSONataExpression
+    evaluateJSONataExpression: evaluateJSONataExpression,
+    clone: cloneDeep
 };
