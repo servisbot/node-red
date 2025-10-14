@@ -15,11 +15,12 @@
  **/
 
 var clone = require("clone");
+var jsonClone = require("rfdc")();
 var jsonata = require("jsonata");
 
 function cloneDeep(obj) {
     try {
-        return structuredClone(obj);
+        return jsonClone(obj);
     } catch (e) {
         return clone(obj);
     }
