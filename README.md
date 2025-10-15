@@ -11,13 +11,13 @@ To make a change to the node-red runtime being used by K4 avalanche:
 
 
 # Dev Work
-If you're using an Apple Silicon MacBook to run and build it, you need to preface your npm commands with `arch -x86_64` as this project uses Node v10 which isn't supported on those devices.
+If you're using an Apple Silicon MacBook, to run and build it you need to prefix all npm commands with `arch -x86_64` because this project uses Node v10, which isn't supported natively on those devices.
 
-When working with k4, you can do the following test your changes as you work:
+When working with k4, you can do the following to test your changes as you work:
 
 In your local node-red project, perform the following:
 
-- `arch -x86_64 npm run build` 
+- `arch -x86_64 npm run build`
 - `npm pack` - this generates a `tgz` file
 
 In your local copy of k4avalanche reference this file in your `package.json`:
