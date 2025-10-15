@@ -22,7 +22,7 @@ In your local node-red project, perform the following:
 
 In your local copy of k4avalanche reference this file in your `package.json`:
 
-- `@servisbot/node-red": "file:../node-red/servisbot-node-red-0.18.7-patch-15.tgz"`
+- `"@servisbot/node-red": "file:../node-red/servisbot-node-red-0.18.7-patch-15.tgz"`
 - `npm install`
 
 Now when you start k4, it will include your local copy of node-red.
