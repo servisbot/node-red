@@ -67,7 +67,7 @@ module.exports = {
     diffNodes: diffNodes,
     mapEnvVarProperties: mapEnvVarProperties,
 
-    parseConfig: function(config) {
+    parseConfig: function(config, skipClone) {
         var flow = {};
         flow.allNodes = {};
         flow.subflows = {};
@@ -76,7 +76,8 @@ module.exports = {
         flow.missingTypes = [];
 
         config.forEach(function(n) {
-            flow.allNodes[n.id] = clone(n);
+            // Only clone if skipClone is false/undefined
+            flow.allNodes[n.id] = skipClone ? n : clone(n);
             if (n.type === 'tab') {
                 flow.flows[n.id] = n;
                 flow.flows[n.id].subflows = {};

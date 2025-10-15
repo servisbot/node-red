@@ -42,7 +42,118 @@ var credentialsPendingReset = false;
 var activeNodesToFlow = {};
 var subflowInstanceNodeMap = {};
 
+// Flow sharding: Keep reference to input config to detect if it's the same object
+var lastInputConfig = null;
+
 var typeEventRegistered = false;
+
+/**
+ * Parse flows with sharding - only clone and parse when absolutely necessary
+ * @param {Array} newConfig - The new configuration array
+ * @param {Object} oldFlowConfig - The previous parsed flow config (optional)
+ * @returns {Object} Parsed flow configuration
+ */
+function parseFlowsWithSharding(newConfig, oldFlowConfig) {
+    var startTime = Date.now();
+
+    // If no old config, do a full parse
+    if (!oldFlowConfig) {
+        log.trace("Flow sharding: full parse (no previous config), " + newConfig.length + " nodes");
+        lastInputConfig = newConfig;
+        return flowUtil.parseConfig(newConfig);
+    }
+
+    // Quick check: if it's literally the same array object, return cached parse
+    if (newConfig === lastInputConfig && oldFlowConfig) {
+        log.trace("Flow sharding: exact same config reference, skipping parse entirely");
+        return oldFlowConfig;
+    }
+
+    // Build index of new config by ID for fast lookup
+    var newById = {};
+    var newIds = [];
+    for (var i = 0; i < newConfig.length; i++) {
+        var n = newConfig[i];
+        newById[n.id] = n;
+        newIds.push(n.id);
+    }
+
+    // Build index of old config
+    var oldById = oldFlowConfig.allNodes || {};
+    var oldIds = Object.keys(oldById);
+
+    // Fast check: different number of nodes = definitely changed
+    if (newIds.length !== oldIds.length) {
+        var diff = Math.abs(newIds.length - oldIds.length);
+        var changeRatio = diff / Math.max(newIds.length, oldIds.length);
+
+        if (changeRatio > 0.1) {
+            // More than 10% size change, do full parse
+            log.trace("Flow sharding: size changed by " + diff + " nodes (" + Math.round(changeRatio * 100) + "%), full parse");
+            lastInputConfig = newConfig;
+            return flowUtil.parseConfig(newConfig);
+        }
+    }
+
+    // Check for changed/new/removed nodes using reference equality where possible
+    var incrementalConfig = [];
+    var clonedCount = 0;
+    var reusedCount = 0;
+    var changedIds = {};
+
+    for (var j = 0; j < newConfig.length; j++) {
+        var newNode = newConfig[j];
+        var oldNode = oldById[newNode.id];
+
+        if (!oldNode) {
+            // New node - must clone
+            incrementalConfig.push(clone(newNode));
+            clonedCount++;
+            changedIds[newNode.id] = true;
+        } else if (newNode === oldNode) {
+            // Exact same object reference - reuse directly (no clone needed!)
+            incrementalConfig.push(oldNode);
+            reusedCount++;
+        } else {
+            // Different object - need to check if content changed
+            // For performance, only check a few key properties first
+            var quickChanged = (
+                newNode.type !== oldNode.type ||
+                newNode.name !== oldNode.name ||
+                newNode.z !== oldNode.z ||
+                (newNode.wires && oldNode.wires && !redUtil.compareObjects(newNode.wires, oldNode.wires))
+            );
+
+            if (quickChanged) {
+                incrementalConfig.push(clone(newNode));
+                clonedCount++;
+                changedIds[newNode.id] = true;
+            } else {
+                // Looks the same, reuse old version
+                incrementalConfig.push(oldNode);
+                reusedCount++;
+            }
+        }
+    }
+
+    var totalChanged = clonedCount;
+    var changeRatio = totalChanged / newConfig.length;
+
+    // If too many nodes changed, fall back to full parse (more efficient)
+    if (changeRatio > 0.3) {
+        log.trace("Flow sharding: " + totalChanged + " nodes changed (" + Math.round(changeRatio * 100) + "%), full parse");
+        lastInputConfig = newConfig;
+        return flowUtil.parseConfig(newConfig);
+    }
+
+    var duration = Date.now() - startTime;
+    log.trace("Flow sharding: cloned " + clonedCount + ", reused " + reusedCount + " nodes (" + duration + "ms)");
+
+    lastInputConfig = newConfig;
+
+    // Pass skipClone=true since we've already handled cloning
+    return flowUtil.parseConfig(incrementalConfig, true);
+}
 
 function init(runtime) {
     if (started) {
@@ -51,6 +162,8 @@ function init(runtime) {
     settings = runtime.settings;
     storage = runtime.storage;
     started = false;
+    // Reset flow sharding cache on init
+    lastInputConfig = null;
     if (!typeEventRegistered) {
         events.on('type-registered',function(type) {
             if (activeFlowConfig && activeFlowConfig.missingTypes.length > 0) {
@@ -118,14 +231,18 @@ function setFlows(_config,type,muteLog,forceStart) {
     if (type === "load") {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
-            config = clone(_config.flows);
-            newFlowConfig = flowUtil.parseConfig(clone(config));
+            // Don't clone here - let parseFlowsWithSharding handle it selectively
+            config = _config.flows;
+            // Use sharding for initial load
+            newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
             type = "full";
             return _config.rev;
         });
     } else {
-        config = clone(_config);
-        newFlowConfig = flowUtil.parseConfig(clone(config));
+        // Don't clone here - let parseFlowsWithSharding handle it selectively
+        config = _config;
+        // Use sharding to only clone/parse changed flows
+        newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
         diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
@@ -509,8 +626,8 @@ function addFlow(flow) {
             nodes.push(node);
         }
     }
-    var newConfig = clone(activeConfig.flows);
-    newConfig = newConfig.concat(nodes);
+    // Avoid full clone - just concatenate new nodes
+    var newConfig = activeConfig.flows.concat(nodes);
 
     return setFlows(newConfig,'flows',true).then(function() {
         log.info(log._("nodes.flows.added-flow",{label:(flow.label?flow.label+" ":"")+"["+flow.id+"]"}));
@@ -592,7 +709,8 @@ function updateFlow(id,newFlow) {
         }
         label = activeFlowConfig.flows[id].label;
     }
-    var newConfig = clone(activeConfig.flows);
+    // Avoid cloning entire config - work with array directly
+    var newConfig = activeConfig.flows.slice();
     var nodes;
 
     if (id === 'global') {
@@ -647,8 +765,8 @@ function removeFlow(id) {
         throw e;
     }
 
-    var newConfig = clone(activeConfig.flows);
-    newConfig = newConfig.filter(function(node) {
+    // Avoid cloning - filter directly
+    var newConfig = activeConfig.flows.filter(function(node) {
         return node.z !== id && node.id !== id;
     });
 
