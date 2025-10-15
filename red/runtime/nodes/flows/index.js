@@ -85,11 +85,11 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     // Fast check: different number of nodes = definitely changed
     if (newIds.length !== oldIds.length) {
         var diff = Math.abs(newIds.length - oldIds.length);
-        var changeRatio = diff / Math.max(newIds.length, oldIds.length);
+        var sizeChangeRatio = diff / Math.max(newIds.length, oldIds.length);
 
-        if (changeRatio > 0.1) {
+        if (sizeChangeRatio > 0.1) {
             // More than 10% size change, do full parse
-            log.trace("Flow sharding: size changed by " + diff + " nodes (" + Math.round(changeRatio * 100) + "%), full parse");
+            log.trace("Flow sharding: size changed by " + diff + " nodes (" + Math.round(sizeChangeRatio * 100) + "%), full parse");
             lastInputConfig = newConfig;
             return flowUtil.parseConfig(newConfig);
         }
@@ -115,21 +115,17 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
             incrementalConfig.push(oldNode);
             reusedCount++;
         } else {
-            // Different object - need to check if content changed
-            // For performance, only check a few key properties first
-            var quickChanged = (
-                newNode.type !== oldNode.type ||
-                newNode.name !== oldNode.name ||
-                newNode.z !== oldNode.z ||
-                (newNode.wires && oldNode.wires && !redUtil.compareObjects(newNode.wires, oldNode.wires))
-            );
+            // Different object - use diffNodes to detect changes in properties
+            // Also check wires separately, treating undefined as []
+            var nodeChanged = flowUtil.diffNodes(oldNode, newNode);
+            var wiresChanged = !redUtil.compareObjects(newNode.wires || [], oldNode.wires || []);
 
-            if (quickChanged) {
+            if (nodeChanged || wiresChanged) {
                 incrementalConfig.push(clone(newNode));
                 clonedCount++;
                 changedIds[newNode.id] = true;
             } else {
-                // Looks the same, reuse old version
+                // No changes detected, reuse old version
                 incrementalConfig.push(oldNode);
                 reusedCount++;
             }
@@ -137,11 +133,11 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     }
 
     var totalChanged = clonedCount;
-    var changeRatio = totalChanged / newConfig.length;
+    var nodeChangeRatio = totalChanged / newConfig.length;
 
     // If too many nodes changed, fall back to full parse (more efficient)
-    if (changeRatio > 0.3) {
-        log.trace("Flow sharding: " + totalChanged + " nodes changed (" + Math.round(changeRatio * 100) + "%), full parse");
+    if (nodeChangeRatio > 0.3) {
+        log.trace("Flow sharding: " + totalChanged + " nodes changed (" + Math.round(nodeChangeRatio * 100) + "%), full parse");
         lastInputConfig = newConfig;
         return flowUtil.parseConfig(newConfig);
     }
