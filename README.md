@@ -11,7 +11,21 @@ To make a change to the node-red runtime being used by K4 avalanche:
 
 
 # Dev Work
-When doing dev work dont try to link into k4/k5 it just causes issue, instead just go into the node-modules of k4/k5 and make your changes in there
+If you're using an Apple Silicon MacBookTo run and build it, you need to preface your npm commands with `arch -x86_64` as this project uses Node v10 which isn't supported on those devices.
+
+When working with k4, you can do the following test your changes as you work:
+
+In your local node-red project, perform the following:
+
+- `arch -x86_64 npm run build` 
+- `npm pack` - this generates a `tgz` file
+
+In your local copy of k4avalanche reference this file in your `package.json`:
+
+- `@servisbot/node-red": "file:../node-red/servisbot-node-red-0.18.7-patch-15.tgz"`
+- `npm install`
+
+Now when you start k4, it will include your local copy of node-red.
 
 # CHANGE-LOG
 
