@@ -47,6 +47,9 @@ var lastInputConfig = null;
 
 var typeEventRegistered = false;
 
+var sizeChangeRatioThreshold = 0.1; // 10%
+var nodeChangeRatioThreshold = 0.3; // 30%
+
 /**
  * Parse flows with sharding - only clone and parse when absolutely necessary
  * @param {Array} newConfig - The new configuration array
@@ -70,11 +73,9 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     }
 
     // Build index of new config by ID for fast lookup
-    var newById = {};
     var newIds = [];
     for (var i = 0; i < newConfig.length; i++) {
         var n = newConfig[i];
-        newById[n.id] = n;
         newIds.push(n.id);
     }
 
@@ -85,10 +86,9 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     // Fast check: different number of nodes = definitely changed
     if (newIds.length !== oldIds.length) {
         var diff = Math.abs(newIds.length - oldIds.length);
-        var sizeChangeRatio = diff / Math.max(newIds.length, oldIds.length);
+        var sizeChangeRatio = diff / Math.max(newIds.length, oldIds.length, 1);
 
-        if (sizeChangeRatio > 0.1) {
-            // More than 10% size change, do full parse
+        if (sizeChangeRatio > sizeChangeRatioThreshold) {
             log.trace("Flow sharding: size changed by " + diff + " nodes (" + Math.round(sizeChangeRatio * 100) + "%), full parse");
             lastInputConfig = newConfig;
             return flowUtil.parseConfig(newConfig);
@@ -99,7 +99,6 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     var incrementalConfig = [];
     var clonedCount = 0;
     var reusedCount = 0;
-    var changedIds = {};
 
     for (var j = 0; j < newConfig.length; j++) {
         var newNode = newConfig[j];
@@ -109,7 +108,6 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
             // New node - must clone
             incrementalConfig.push(clone(newNode));
             clonedCount++;
-            changedIds[newNode.id] = true;
         } else if (newNode === oldNode) {
             // Exact same object reference - reuse directly (no clone needed!)
             incrementalConfig.push(oldNode);
@@ -123,7 +121,6 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
             if (nodeChanged || wiresChanged) {
                 incrementalConfig.push(clone(newNode));
                 clonedCount++;
-                changedIds[newNode.id] = true;
             } else {
                 // No changes detected, reuse old version
                 incrementalConfig.push(oldNode);
@@ -136,7 +133,7 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     var nodeChangeRatio = totalChanged / newConfig.length;
 
     // If too many nodes changed, fall back to full parse (more efficient)
-    if (nodeChangeRatio > 0.3) {
+    if (nodeChangeRatio > nodeChangeRatioThreshold) {
         log.trace("Flow sharding: " + totalChanged + " nodes changed (" + Math.round(nodeChangeRatio * 100) + "%), full parse");
         lastInputConfig = newConfig;
         return flowUtil.parseConfig(newConfig);
