@@ -86,6 +86,7 @@ function parseFlowsWithSharding(newConfig, oldFlowConfig) {
     // Fast check: different number of nodes = definitely changed
     if (newIds.length !== oldIds.length) {
         var diff = Math.abs(newIds.length - oldIds.length);
+        // adding 1 here to potentially avoid division by zero
         var sizeChangeRatio = diff / Math.max(newIds.length, oldIds.length, 1);
 
         if (sizeChangeRatio > sizeChangeRatioThreshold) {
