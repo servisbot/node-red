@@ -29,7 +29,7 @@ Now when you start k4, it will include your local copy of node-red.
 
 # CHANGE-LOG
 
-## 0.18.8
+## 0.18.7-patch-16
 2025-10-28
 - Adds new flow shard caching to reduce memory footprint and improve flow loading and update speed
 
