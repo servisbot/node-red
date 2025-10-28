@@ -18,7 +18,7 @@ When working with k4, you can do the following to test your changes as you work:
 In your local node-red project, perform the following:
 
 - `arch -x86_64 npm run build`
-- `npm pack` - this generates a `tgz` file
+- `arch -x86_64 npm pack` - this generates a `tgz` file
 
 In your local copy of k4avalanche reference this file in your `package.json`:
 
@@ -28,6 +28,10 @@ In your local copy of k4avalanche reference this file in your `package.json`:
 Now when you start k4, it will include your local copy of node-red.
 
 # CHANGE-LOG
+
+## 0.18.8
+2025-10-28
+- Adds new flow shard caching to reduce memory footprint and improve flow loading and update speed
 
 ## 0.18.7-patch-15
 2024-01-11
