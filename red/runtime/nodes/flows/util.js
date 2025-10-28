@@ -76,7 +76,6 @@ module.exports = {
         flow.missingTypes = [];
 
         config.forEach(function(n) {
-            // Only clone if skipClone is false/undefined
             flow.allNodes[n.id] = skipClone ? n : clone(n);
             if (n.type === 'tab') {
                 flow.flows[n.id] = n;

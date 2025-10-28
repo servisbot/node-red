@@ -241,5 +241,7 @@ module.exports = {
             // To enable the Projects feature, set this value to true
             enabled: false
         }
-    }
+    },
+
+    enableFlowSharding: process.env.ENABLE_FLOW_SHARDING === 'true'
 }

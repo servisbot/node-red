@@ -153,6 +153,7 @@ function init(runtime) {
     if (started) {
         throw new Error("Cannot init without a stop");
     }
+
     settings = runtime.settings;
     storage = runtime.storage;
     started = false;
@@ -225,18 +226,25 @@ function setFlows(_config,type,muteLog,forceStart) {
     if (type === "load") {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
-            // Don't clone here - let parseFlowsWithSharding handle it selectively
-            config = _config.flows;
-            // Use sharding for initial load
-            newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
+            if (settings.enableFlowSharding) {
+                config = _config.flows;
+                newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
+            } else {
+                config = clone(_config.flows);
+                newFlowConfig = flowUtil.parseConfig(clone(config));
+            }
             type = "full";
             return _config.rev;
         });
     } else {
-        // Don't clone here - let parseFlowsWithSharding handle it selectively
-        config = _config;
-        // Use sharding to only clone/parse changed flows
-        newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
+        if (settings.enableFlowSharding) {
+            config = _config;
+            newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
+        } else {
+            config = clone(_config);
+            newFlowConfig = flowUtil.parseConfig(clone(config));
+        }
+
         diff = flowUtil.diffConfigs(activeFlowConfig,newFlowConfig);
 
         // Now the flows have been compared, remove any credentials from newFlowConfig
@@ -620,8 +628,13 @@ function addFlow(flow) {
             nodes.push(node);
         }
     }
-    // Avoid full clone - just concatenate new nodes
-    var newConfig = activeConfig.flows.concat(nodes);
+    
+    if (settings.enableFlowSharding) {
+        var newConfig = activeConfig.flows.concat(nodes);
+    } else {
+        var newConfig = clone(activeConfig.flows);
+        newConfig = newConfig.concat(nodes);
+    }
 
     return setFlows(newConfig,'flows',true).then(function() {
         log.info(log._("nodes.flows.added-flow",{label:(flow.label?flow.label+" ":"")+"["+flow.id+"]"}));
@@ -703,8 +716,13 @@ function updateFlow(id,newFlow) {
         }
         label = activeFlowConfig.flows[id].label;
     }
-    // Avoid cloning entire config - work with array directly
-    var newConfig = activeConfig.flows.slice();
+    
+    if (settings.enableFlowSharding) {
+        var newConfig = activeConfig.flows.slice();
+    } else {
+        var newConfig = clone(activeConfig.flows);
+    }
+
     var nodes;
 
     if (id === 'global') {
@@ -759,10 +777,16 @@ function removeFlow(id) {
         throw e;
     }
 
-    // Avoid cloning - filter directly
-    var newConfig = activeConfig.flows.filter(function(node) {
-        return node.z !== id && node.id !== id;
-    });
+    if (settings.enableFlowSharding) {
+        var newConfig = activeConfig.flows.filter(function(node) {
+            return node.z !== id && node.id !== id;
+        });
+    } else {
+        var newConfig = clone(activeConfig.flows);
+        newConfig = newConfig.filter(function(node) {
+            return node.z !== id && node.id !== id;
+        });
+    }
 
     return setFlows(newConfig,'flows',true).then(function() {
         log.info(log._("nodes.flows.removed-flow",{label:(flow.label?flow.label+" ":"")+"["+flow.id+"]"}));
