@@ -43,6 +43,8 @@ var activeNodesToFlow = {};
 var subflowInstanceNodeMap = {};
 
 // Flow sharding: Keep reference to input config to detect if it's the same object
+var enableFlowSharding = process.env.ENABLE_FLOW_SHARDING === "true";
+
 var lastInputConfig = null;
 
 var typeEventRegistered = false;
@@ -226,7 +228,7 @@ function setFlows(_config,type,muteLog,forceStart) {
     if (type === "load") {
         isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
-            if (settings.enableFlowSharding) {
+            if (enableFlowSharding) {
                 config = _config.flows;
                 newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
             } else {
@@ -237,7 +239,7 @@ function setFlows(_config,type,muteLog,forceStart) {
             return _config.rev;
         });
     } else {
-        if (settings.enableFlowSharding) {
+        if (enableFlowSharding) {
             config = _config;
             newFlowConfig = parseFlowsWithSharding(config, activeFlowConfig);
         } else {
@@ -629,7 +631,7 @@ function addFlow(flow) {
         }
     }
     
-    if (settings.enableFlowSharding) {
+    if (enableFlowSharding) {
         var newConfig = activeConfig.flows.concat(nodes);
     } else {
         var newConfig = clone(activeConfig.flows);
@@ -717,7 +719,7 @@ function updateFlow(id,newFlow) {
         label = activeFlowConfig.flows[id].label;
     }
     
-    if (settings.enableFlowSharding) {
+    if (enableFlowSharding) {
         var newConfig = activeConfig.flows.slice();
     } else {
         var newConfig = clone(activeConfig.flows);
@@ -777,7 +779,7 @@ function removeFlow(id) {
         throw e;
     }
 
-    if (settings.enableFlowSharding) {
+    if (enableFlowSharding) {
         var newConfig = activeConfig.flows.filter(function(node) {
             return node.z !== id && node.id !== id;
         });
