@@ -70,7 +70,7 @@
     "passport-http-bearer": "1.0.1",
     "passport-oauth2-client-password": "0.1.2",
     "raw-body": "2.3.3",
-    "semver": "5.5.0",
+    "semver": "5.7.2",
     "sentiment": "2.1.0",
     "uglify-js": "3.3.25",
     "vm2": "^3.8.4",
