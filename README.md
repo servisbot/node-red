@@ -29,6 +29,10 @@ Now when you start k4, it will include your local copy of node-red.
 
 # CHANGE-LOG
 
+## 0.18.7-patch-18
+2026-11-05
+- Bumps `vm2` to ^3.12.2 (with `acorn` and `acorn-walk`) to address security vulnerabilities
+
 ## 0.18.7-patch-17
 2025-10-29
 - Fixes configuration for enabling flow sharding
