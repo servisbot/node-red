@@ -1,6 +1,6 @@
 {
   "name": "@servisbot/node-red",
-  "version": "0.18.7-patch-17",
+  "version": "0.18.7-patch-18",
   "description": "A visual tool for wiring the Internet of Things",
   "homepage": "http://nodered.org",
   "license": "Apache-2.0",
@@ -73,7 +73,7 @@
     "semver": "5.5.0",
     "sentiment": "2.1.0",
     "uglify-js": "3.3.25",
-    "vm2": "^3.8.4",
+    "vm2": "^3.12.2",
     "when": "3.7.8",
     "ws": "1.1.5",
     "xml2js": "0.4.19"
